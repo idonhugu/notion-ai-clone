@@ -145,25 +145,19 @@ export default function Editor({
             onUpdateDocument(payload);
           }
 
-          const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const { error } = await supabase
+            .from('documents')
+            .update(payload)
+            .eq('id', doc.id);
 
-          if (hasSupabaseUrl) {
-            const { error } = await supabase
-              .from('documents')
-              .update(payload)
-              .eq('id', doc.id);
-
-            if (error) {
-              setSaveStatus('local');
-            } else {
-              setSaveStatus('saved');
-            }
+          if (error) {
+            console.error('Cloud save error:', error);
+            setSaveStatus('error');
           } else {
-            // Local storage fallback
+            setSaveStatus('saved');
             if (typeof window !== 'undefined') {
               localStorage.setItem(`doc_${doc.id}`, JSON.stringify(payload));
             }
-            setSaveStatus('local');
           }
         } catch (err) {
           console.error('Error saving document:', err);

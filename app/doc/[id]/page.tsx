@@ -35,66 +35,32 @@ function DocumentContent() {
       setLoading(true);
 
       try {
-        const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-        if (hasSupabaseUrl) {
-          const { data, error } = await supabase
-            .from('documents')
-            .select('*')
-            .eq('id', id)
-            .single();
-
-          if (error || !data) {
-            if (id === DEFAULT_STARTER_DOC.id) {
-              setDocument(DEFAULT_STARTER_DOC);
-            } else {
-              setNotFound(true);
-            }
-          } else {
-            const cleanDoc = {
-              ...data,
-              title: data.title ? data.title.replace(/^🚀\s*/, '') : 'Untitled',
-            };
-            setDocument(cleanDoc);
-
-            if (data.parent_id) {
-              const { data: parentData } = await supabase
-                .from('documents')
-                .select('*')
-                .eq('id', data.parent_id)
-                .single();
-              if (parentData) setParentDocument(parentData);
-            }
-          }
-        } else {
-          // Check local storage fallback
-          const localDocs = localStorage.getItem('notion_ai_docs');
-          if (localDocs) {
-            const parsed: Document[] = JSON.parse(localDocs);
-            const found = parsed.find((d) => d.id === id);
-            if (found) {
-              const cleanDoc = {
-                ...found,
-                title: found.title ? found.title.replace(/^🚀\s*/, '') : 'Untitled',
-              };
-              setDocument(cleanDoc);
-              if (cleanDoc.parent_id) {
-                const parent = parsed.find((d) => d.id === cleanDoc.parent_id);
-                if (parent) setParentDocument(parent);
-              }
-            } else if (id === DEFAULT_STARTER_DOC.id) {
-              setDocument(DEFAULT_STARTER_DOC);
-            } else {
-              setNotFound(true);
-            }
-          } else if (id === DEFAULT_STARTER_DOC.id) {
+        if (error || !data) {
+          if (id === DEFAULT_STARTER_DOC.id) {
             setDocument(DEFAULT_STARTER_DOC);
           } else {
             setNotFound(true);
           }
+        } else {
+          setDocument(data);
+
+          if (data.parent_id) {
+            const { data: parentData } = await supabase
+              .from('documents')
+              .select('*')
+              .eq('id', data.parent_id)
+              .single();
+            if (parentData) setParentDocument(parentData);
+          }
         }
       } catch (err) {
-        console.error('Error loading doc:', err);
+        console.error('Error loading doc from cloud:', err);
         setNotFound(true);
       } finally {
         setLoading(false);

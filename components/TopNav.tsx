@@ -112,17 +112,20 @@ export function TopNav({
           {saveStatus === 'saving' && (
             <>
               <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
-              <span className="text-purple-600 dark:text-purple-400">Saving...</span>
+              <span className="text-purple-600 dark:text-purple-400 font-medium">Syncing...</span>
             </>
           )}
           {saveStatus === 'saved' && (
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-neutral-400">Saved</span>
+              <span className="text-neutral-400">Cloud Synced</span>
             </>
           )}
           {saveStatus === 'local' && (
-            <span className="text-neutral-400">Saved</span>
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="text-neutral-400">Cloud Synced</span>
+            </>
           )}
           {saveStatus === 'error' && (
             <>

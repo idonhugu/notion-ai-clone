@@ -24,44 +24,17 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchFirstDoc() {
       try {
-        const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('is_archived', false)
+          .order('created_at', { ascending: true })
+          .limit(1);
 
-        if (hasSupabaseUrl) {
-          const { data, error } = await supabase
-            .from('documents')
-            .select('*')
-            .order('created_at', { ascending: true })
-            .limit(1);
-
-          if (!error && data && data.length > 0) {
-            const doc = data[0];
-            setCurrentDoc({
-              ...doc,
-              title: doc.title ? doc.title.replace(/^🚀\s*/, '') : 'Untitled',
-            });
-          } else {
-            setCurrentDoc(DEFAULT_STARTER_DOC);
-          }
+        if (!error && data && data.length > 0) {
+          setCurrentDoc(data[0]);
         } else {
-          const localDocsStr = localStorage.getItem('notion_ai_docs');
-          if (localDocsStr) {
-            try {
-              const parsed = JSON.parse(localDocsStr);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                const doc = parsed[0];
-                setCurrentDoc({
-                  ...doc,
-                  title: doc.title ? doc.title.replace(/^🚀\s*/, '') : 'Untitled',
-                });
-              } else {
-                setCurrentDoc(DEFAULT_STARTER_DOC);
-              }
-            } catch {
-              setCurrentDoc(DEFAULT_STARTER_DOC);
-            }
-          } else {
-            setCurrentDoc(DEFAULT_STARTER_DOC);
-          }
+          setCurrentDoc(DEFAULT_STARTER_DOC);
         }
       } catch (err) {
         console.error('Fetch home doc error:', err);

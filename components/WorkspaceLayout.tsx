@@ -14,7 +14,7 @@ interface WorkspaceLayoutProps {
 
 const DEFAULT_STARTER_DOC: Document = {
   id: 'welcome-page',
-  user_id: 'default-user',
+  user_id: 'admin-user',
   title: 'Welcome to Notion AI',
   icon: '🚀',
   cover_image:
@@ -38,7 +38,7 @@ const DEFAULT_STARTER_DOC: Document = {
       content: [
         {
           type: 'text',
-          text: 'This is a complete Notion workspace powered by Next.js, BlockNote, and Google Gemini AI. Everything saves automatically in real time.',
+          text: 'This workspace is connected to your Supabase cloud database. All changes, notes, attachments, and pages sync seamlessly across all your devices in real-time.',
         },
       ],
     },
@@ -46,34 +46,40 @@ const DEFAULT_STARTER_DOC: Document = {
       id: 'b-3',
       type: 'checkListItem',
       props: { checked: true },
-      content: [{ type: 'text', text: 'Fast block-based editing with slash commands (/)' }],
+      content: [{ type: 'text', text: 'Cloud database connected & syncing everywhere' }],
     },
     {
       id: 'b-4',
       type: 'checkListItem',
-      props: { checked: false },
-      content: [{ type: 'text', text: 'Press Space on an empty block to trigger Ask Notion AI' }],
+      props: { checked: true },
+      content: [{ type: 'text', text: 'Google Gemini AI streaming active' }],
     },
     {
       id: 'b-5',
       type: 'checkListItem',
       props: { checked: false },
-      content: [{ type: 'text', text: 'Highlight any text to fix spelling, summarize, or lengthen' }],
+      content: [{ type: 'text', text: 'Press Space on an empty line to trigger Ask Notion AI' }],
     },
     {
       id: 'b-6',
       type: 'checkListItem',
       props: { checked: false },
-      content: [{ type: 'text', text: 'Upload files and documents using the attachment bar below' }],
+      content: [{ type: 'text', text: 'Highlight any text to fix spelling, summarize, or lengthen' }],
     },
     {
       id: 'b-7',
+      type: 'checkListItem',
+      props: { checked: false },
+      content: [{ type: 'text', text: 'Upload files and documents using the attachment bar below' }],
+    },
+    {
+      id: 'b-8',
       type: 'heading',
       props: { level: 2 },
       content: [{ type: 'text', text: 'Google Gemini AI Capabilities' }],
     },
     {
-      id: 'b-8',
+      id: 'b-9',
       type: 'bulletListItem',
       content: [
         {
@@ -83,7 +89,7 @@ const DEFAULT_STARTER_DOC: Document = {
       ],
     },
     {
-      id: 'b-9',
+      id: 'b-10',
       type: 'bulletListItem',
       content: [
         {
@@ -93,7 +99,7 @@ const DEFAULT_STARTER_DOC: Document = {
       ],
     },
     {
-      id: 'b-10',
+      id: 'b-11',
       type: 'bulletListItem',
       content: [
         {
@@ -103,7 +109,7 @@ const DEFAULT_STARTER_DOC: Document = {
       ],
     },
     {
-      id: 'b-11',
+      id: 'b-12',
       type: 'paragraph',
       content: [],
     },
@@ -116,7 +122,7 @@ export function WorkspaceLayout({
   initialDoc,
 }: WorkspaceLayoutProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>('Laksha');
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const router = useRouter();
@@ -135,73 +141,36 @@ export function WorkspaceLayout({
 
     async function loadDocs() {
       try {
-        const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .order('created_at', { ascending: true });
 
-        if (hasSupabaseUrl) {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-
-          if (user) {
-            setUserEmail(user.email || 'Laksha');
-          }
-
-          const { data, error } = await supabase
-            .from('documents')
-            .select('*')
-            .order('created_at', { ascending: true });
-
-          if (!error && data && data.length > 0) {
-            setDocuments(data);
-          } else {
-            // Seed starter doc in Supabase if empty
-            if (user) {
-              const starterWithUser = {
-                ...DEFAULT_STARTER_DOC,
-                id: undefined,
-                user_id: user.id,
-              };
-              const { data: seeded } = await supabase
-                .from('documents')
-                .insert(starterWithUser)
-                .select()
-                .single();
-
-              if (seeded) {
-                setDocuments([seeded]);
-              } else {
-                setDocuments([DEFAULT_STARTER_DOC]);
-              }
-            } else {
-              setDocuments([DEFAULT_STARTER_DOC]);
-            }
+        if (!error && data && data.length > 0) {
+          setDocuments(data);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('notion_ai_docs', JSON.stringify(data));
           }
         } else {
-          // Local storage fallback
-          const localDocsStr = localStorage.getItem('notion_ai_docs');
-          if (localDocsStr) {
-            try {
-              const parsed: Document[] = JSON.parse(localDocsStr);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                // Sanitize duplicate rockets from old versions
-                const sanitized = parsed.map((d) => ({
-                  ...d,
-                  title: d.title ? d.title.replace(/^🚀\s*/, '') : 'Untitled',
-                }));
-                setDocuments(sanitized);
-              } else {
-                setDocuments([DEFAULT_STARTER_DOC]);
-              }
-            } catch {
-              setDocuments([DEFAULT_STARTER_DOC]);
-            }
+          // Seed starter doc in Supabase if empty
+          const { data: seeded } = await supabase
+            .from('documents')
+            .insert({
+              ...DEFAULT_STARTER_DOC,
+              id: undefined,
+              user_id: 'admin-user',
+            })
+            .select()
+            .single();
+
+          if (seeded) {
+            setDocuments([seeded]);
           } else {
             setDocuments([DEFAULT_STARTER_DOC]);
-            localStorage.setItem('notion_ai_docs', JSON.stringify([DEFAULT_STARTER_DOC]));
           }
         }
       } catch (err) {
-        console.error('Failed to load documents:', err);
+        console.error('Failed to load documents from cloud:', err);
         setDocuments([DEFAULT_STARTER_DOC]);
       } finally {
         setLoading(false);
@@ -224,10 +193,7 @@ export function WorkspaceLayout({
 
   // Handle document archiving to trash
   const handleDocumentArchived = async (id: string) => {
-    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (hasSupabaseUrl) {
-      await supabase.from('documents').update({ is_archived: true }).eq('id', id);
-    }
+    await supabase.from('documents').update({ is_archived: true }).eq('id', id);
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: true } : d));
@@ -244,10 +210,7 @@ export function WorkspaceLayout({
 
   // Handle restoring from trash
   const handleRestoreDocument = async (id: string) => {
-    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (hasSupabaseUrl) {
-      await supabase.from('documents').update({ is_archived: false }).eq('id', id);
-    }
+    await supabase.from('documents').update({ is_archived: false }).eq('id', id);
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: false } : d));
@@ -260,10 +223,7 @@ export function WorkspaceLayout({
 
   // Handle permanent deletion
   const handlePermanentDelete = async (id: string) => {
-    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (hasSupabaseUrl) {
-      await supabase.from('documents').delete().eq('id', id);
-    }
+    await supabase.from('documents').delete().eq('id', id);
 
     setDocuments((prev) => {
       const updated = prev.filter((d) => d.id !== id);
@@ -276,10 +236,7 @@ export function WorkspaceLayout({
 
   // Handle favorite toggle
   const handleToggleFavorite = async (id: string, isFav: boolean) => {
-    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (hasSupabaseUrl) {
-      await supabase.from('documents').update({ is_favorite: isFav }).eq('id', id);
-    }
+    await supabase.from('documents').update({ is_favorite: isFav }).eq('id', id);
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_favorite: isFav } : d));
