@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { createDocument } from '@/lib/api/documents';
 import { SearchModal } from './SearchModal';
 import { TemplatesModal, Template } from './TemplatesModal';
 import { TrashModal } from './TrashModal';
@@ -111,37 +112,7 @@ export function Sidebar({
         cover_image: null,
       };
 
-      let createdDoc: Document;
-
-      const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-      if (hasSupabaseUrl) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        const { data, error } = await supabase
-          .from('documents')
-          .insert({
-            ...newDocPayload,
-            user_id: user?.id || 'admin-user',
-          })
-          .select()
-          .single();
-
-        if (error || !data) {
-          throw new Error(error?.message || 'Failed to create document in Supabase');
-        }
-        createdDoc = data;
-      } else {
-        createdDoc = {
-          id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          user_id: 'admin-user',
-          ...newDocPayload,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-      }
+      const createdDoc = await createDocument(newDocPayload);
 
       if (parentId) {
         setExpandedNodes((prev) => ({ ...prev, [parentId]: true }));
@@ -155,21 +126,6 @@ export function Sidebar({
       setIsMobileOpen(false);
     } catch (err) {
       console.error('Create page error:', err);
-      const fallbackDoc: Document = {
-        id: `doc_${Date.now()}`,
-        user_id: 'admin-user',
-        title: initialData?.title || 'Untitled',
-        content: initialData?.content || [],
-        parent_id: parentId || null,
-        is_favorite: false,
-        is_archived: false,
-        icon: initialData?.icon || '📄',
-        cover_image: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      if (onDocumentCreated) onDocumentCreated(fallbackDoc);
-      router.push(`/doc/${fallbackDoc.id}`);
     }
   };
 

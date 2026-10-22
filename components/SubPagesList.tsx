@@ -13,6 +13,7 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { createDocument, updateDocument } from '@/lib/api/documents';
 import { Document } from '@/lib/types';
 
 interface SubPagesListProps {
@@ -27,34 +28,36 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
   const supabase = createClient();
 
   useEffect(() => {
+    let isMounted = true;
     async function fetchSubpages() {
       try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('*')
-          .eq('parent_id', currentDocId)
-          .eq('is_archived', false)
-          .order('updated_at', { ascending: false });
-
-        if (!error && data) {
-          setSubpages(data);
+        const res = await fetch(`/api/documents?parent_id=${currentDocId}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data)) {
+            setSubpages(data);
+          }
         }
       } catch (err) {
         console.error('Error fetching subpages:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     if (currentDocId) {
       fetchSubpages();
     }
-  }, [currentDocId, supabase]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentDocId]);
 
   const handleCreateSubpage = async () => {
     setIsCreating(true);
     try {
-      const newDoc = {
+      const created = await createDocument({
         title: 'Untitled Sub-page',
         parent_id: currentDocId,
         user_id: 'admin-user',
@@ -63,16 +66,10 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
         is_archived: false,
         content: [],
         attachments: [],
-      };
+      });
 
-      const { data, error } = await supabase
-        .from('documents')
-        .insert(newDoc)
-        .select()
-        .single();
-
-      if (!error && data) {
-        router.push(`/doc/${data.id}`);
+      if (created?.id) {
+        router.push(`/doc/${created.id}`);
       }
     } catch (err) {
       console.error('Failed to create subpage:', err);
@@ -85,10 +82,7 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await supabase
-        .from('documents')
-        .update({ is_archived: true })
-        .eq('id', subId);
+      await updateDocument(subId, { is_archived: true });
       setSubpages((prev) => prev.filter((p) => p.id !== subId));
     } catch (err) {
       console.error('Failed to archive subpage:', err);

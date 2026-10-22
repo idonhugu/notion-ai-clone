@@ -3,118 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Document } from '@/lib/types';
-import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import {
+  fetchAllDocuments,
+  updateDocument,
+  deleteDocument,
+  DEFAULT_STARTER_DOC,
+} from '@/lib/api/documents';
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
   activeDocId?: string;
   initialDoc?: Document;
 }
-
-const DEFAULT_STARTER_DOC: Document = {
-  id: 'welcome-page',
-  user_id: 'admin-user',
-  title: 'Welcome to Notion AI',
-  icon: '🚀',
-  cover_image:
-    'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1600&auto=format&fit=crop&q=80',
-  parent_id: null,
-  is_favorite: true,
-  is_archived: false,
-  attachments: [],
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-  content: [
-    {
-      id: 'b-1',
-      type: 'heading',
-      props: { level: 1 },
-      content: [{ type: 'text', text: 'Welcome to your Notion AI Workspace' }],
-    },
-    {
-      id: 'b-2',
-      type: 'paragraph',
-      content: [
-        {
-          type: 'text',
-          text: 'This workspace is connected to your Supabase cloud database. All changes, notes, attachments, and pages sync seamlessly across all your devices in real-time.',
-        },
-      ],
-    },
-    {
-      id: 'b-3',
-      type: 'checkListItem',
-      props: { checked: true },
-      content: [{ type: 'text', text: 'Cloud database connected & syncing everywhere' }],
-    },
-    {
-      id: 'b-4',
-      type: 'checkListItem',
-      props: { checked: true },
-      content: [{ type: 'text', text: 'Google Gemini AI streaming active' }],
-    },
-    {
-      id: 'b-5',
-      type: 'checkListItem',
-      props: { checked: false },
-      content: [{ type: 'text', text: 'Press Space on an empty line to trigger Ask Notion AI' }],
-    },
-    {
-      id: 'b-6',
-      type: 'checkListItem',
-      props: { checked: false },
-      content: [{ type: 'text', text: 'Highlight any text to fix spelling, summarize, or lengthen' }],
-    },
-    {
-      id: 'b-7',
-      type: 'checkListItem',
-      props: { checked: false },
-      content: [{ type: 'text', text: 'Upload files and documents using the attachment bar below' }],
-    },
-    {
-      id: 'b-8',
-      type: 'heading',
-      props: { level: 2 },
-      content: [{ type: 'text', text: 'Google Gemini AI Capabilities' }],
-    },
-    {
-      id: 'b-9',
-      type: 'bulletListItem',
-      content: [
-        {
-          type: 'text',
-          text: 'Real-time streaming responses rendered directly into native editor blocks',
-        },
-      ],
-    },
-    {
-      id: 'b-10',
-      type: 'bulletListItem',
-      content: [
-        {
-          type: 'text',
-          text: 'Tone transformation (Professional, Casual, Concise) and summarization',
-        },
-      ],
-    },
-    {
-      id: 'b-11',
-      type: 'bulletListItem',
-      content: [
-        {
-          type: 'text',
-          text: 'Press ⌘+K at any time to quick-search through all your workspace documents',
-        },
-      ],
-    },
-    {
-      id: 'b-12',
-      type: 'paragraph',
-      content: [],
-    },
-  ],
-};
 
 export function WorkspaceLayout({
   children,
@@ -124,7 +25,6 @@ export function WorkspaceLayout({
   const [documents, setDocuments] = useState<Document[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>('Laksha');
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
   const router = useRouter();
 
   // Load user info & documents
@@ -139,51 +39,37 @@ export function WorkspaceLayout({
       }
     }
 
+    let isMounted = true;
+
     async function loadDocs() {
       try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('*')
-          .order('created_at', { ascending: true });
-
-        if (!error && data && data.length > 0) {
+        const data = await fetchAllDocuments();
+        if (isMounted) {
           setDocuments(data);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('notion_ai_docs', JSON.stringify(data));
-          }
-        } else {
-          // Seed starter doc in Supabase if empty
-          const { data: seeded } = await supabase
-            .from('documents')
-            .insert({
-              ...DEFAULT_STARTER_DOC,
-              id: undefined,
-              user_id: 'admin-user',
-            })
-            .select()
-            .single();
-
-          if (seeded) {
-            setDocuments([seeded]);
-          } else {
-            setDocuments([DEFAULT_STARTER_DOC]);
-          }
         }
       } catch (err) {
-        console.error('Failed to load documents from cloud:', err);
-        setDocuments([DEFAULT_STARTER_DOC]);
+        console.error('Failed to load documents:', err);
+        if (isMounted) {
+          setDocuments([DEFAULT_STARTER_DOC]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     loadDocs();
-  }, [supabase]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Handle document additions
   const handleDocumentCreated = (newDoc: Document) => {
     setDocuments((prev) => {
-      const updated = [...prev, newDoc];
+      const updated = [...prev.filter((d) => d.id !== newDoc.id), newDoc];
       if (typeof window !== 'undefined') {
         localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
       }
@@ -193,7 +79,7 @@ export function WorkspaceLayout({
 
   // Handle document archiving to trash
   const handleDocumentArchived = async (id: string) => {
-    await supabase.from('documents').update({ is_archived: true }).eq('id', id);
+    await updateDocument(id, { is_archived: true });
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: true } : d));
@@ -210,7 +96,7 @@ export function WorkspaceLayout({
 
   // Handle restoring from trash
   const handleRestoreDocument = async (id: string) => {
-    await supabase.from('documents').update({ is_archived: false }).eq('id', id);
+    await updateDocument(id, { is_archived: false });
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: false } : d));
@@ -223,7 +109,7 @@ export function WorkspaceLayout({
 
   // Handle permanent deletion
   const handlePermanentDelete = async (id: string) => {
-    await supabase.from('documents').delete().eq('id', id);
+    await deleteDocument(id, true);
 
     setDocuments((prev) => {
       const updated = prev.filter((d) => d.id !== id);
@@ -236,7 +122,7 @@ export function WorkspaceLayout({
 
   // Handle favorite toggle
   const handleToggleFavorite = async (id: string, isFav: boolean) => {
-    await supabase.from('documents').update({ is_favorite: isFav }).eq('id', id);
+    await updateDocument(id, { is_favorite: isFav });
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_favorite: isFav } : d));

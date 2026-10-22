@@ -3,9 +3,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { WorkspaceLayout, DEFAULT_STARTER_DOC } from '@/components/WorkspaceLayout';
+import { WorkspaceLayout } from '@/components/WorkspaceLayout';
 import { Document } from '@/lib/types';
-import { createClient } from '@/lib/supabase/client';
+import { fetchDocumentById } from '@/lib/api/documents';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -27,48 +27,41 @@ function DocumentContent() {
   const [parentDocument, setParentDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const supabase = createClient();
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadDoc() {
       if (!id) return;
       setLoading(true);
+      setNotFound(false);
 
       try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('*')
-          .eq('id', id)
-          .single();
+        const { document: docData, parentDocument: parentData } = await fetchDocumentById(id);
 
-        if (error || !data) {
-          if (id === DEFAULT_STARTER_DOC.id) {
-            setDocument(DEFAULT_STARTER_DOC);
-          } else {
-            setNotFound(true);
-          }
+        if (!isMounted) return;
+
+        if (docData) {
+          setDocument(docData);
+          setParentDocument(parentData);
+          setNotFound(false);
         } else {
-          setDocument(data);
-
-          if (data.parent_id) {
-            const { data: parentData } = await supabase
-              .from('documents')
-              .select('*')
-              .eq('id', data.parent_id)
-              .single();
-            if (parentData) setParentDocument(parentData);
-          }
+          setNotFound(true);
         }
       } catch (err) {
-        console.error('Error loading doc from cloud:', err);
-        setNotFound(true);
+        console.error('Error loading doc:', err);
+        if (isMounted) setNotFound(true);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     loadDoc();
-  }, [id, supabase]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   if (loading) {
     return (
@@ -81,7 +74,7 @@ function DocumentContent() {
   if (notFound || !document) {
     return (
       <WorkspaceLayout activeDocId={id}>
-        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center min-h-[70vh]">
           <div className="text-4xl mb-3">📄</div>
           <h2 className="text-xl font-bold text-neutral-800 dark:text-neutral-200">
             Document not found

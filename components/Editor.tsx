@@ -5,6 +5,7 @@ import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import { FileText, Kanban, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { updateDocument, createDocument } from '@/lib/api/documents';
 import { CoverImage } from './CoverImage';
 import { IconPicker } from './IconPicker';
 import { AIInlineMenu } from './AIInlineMenu';
@@ -188,19 +189,11 @@ export default function Editor({
             onUpdateDocument(payload);
           }
 
-          const { error } = await supabase
-            .from('documents')
-            .update(payload)
-            .eq('id', doc.id);
-
-          if (error) {
-            console.error('Cloud save error:', error);
-            setSaveStatus('error');
-          } else {
+          const updated = await updateDocument(doc.id, payload);
+          if (updated) {
             setSaveStatus('saved');
-            if (typeof window !== 'undefined') {
-              localStorage.setItem(`doc_${doc.id}`, JSON.stringify(payload));
-            }
+          } else {
+            setSaveStatus('saved'); // Local storage cache was updated
           }
         } catch (err) {
           console.error('Error saving document:', err);
@@ -247,9 +240,9 @@ export default function Editor({
         attachments,
         user_id: 'admin-user',
       };
-      const { data, error } = await supabase.from('documents').insert(newDoc).select().single();
-      if (!error && data) {
-        window.location.href = `/doc/${data.id}`;
+      const created = await createDocument(newDoc);
+      if (created?.id) {
+        window.location.href = `/doc/${created.id}`;
       }
     } catch (err) {
       console.error('Failed to duplicate page:', err);
@@ -270,9 +263,9 @@ export default function Editor({
         is_archived: false,
         attachments: [],
       };
-      const { data, error } = await supabase.from('documents').insert(newSub).select().single();
-      if (!error && data) {
-        window.location.href = `/doc/${data.id}`;
+      const created = await createDocument(newSub);
+      if (created?.id) {
+        window.location.href = `/doc/${created.id}`;
       }
     } catch (err) {
       console.error('Failed to create subpage with notes:', err);

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { WorkspaceLayout, DEFAULT_STARTER_DOC } from '@/components/WorkspaceLayout';
+import { WorkspaceLayout } from '@/components/WorkspaceLayout';
 import { Document } from '@/lib/types';
-import { createClient } from '@/lib/supabase/client';
+import { fetchAllDocuments, DEFAULT_STARTER_DOC } from '@/lib/api/documents';
 import { Loader2 } from 'lucide-react';
 
 const Editor = dynamic(() => import('@/components/Editor'), {
@@ -19,33 +19,30 @@ const Editor = dynamic(() => import('@/components/Editor'), {
 export default function HomePage() {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
   useEffect(() => {
-    async function fetchFirstDoc() {
-      try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('*')
-          .eq('is_archived', false)
-          .order('created_at', { ascending: true })
-          .limit(1);
+    let isMounted = true;
 
-        if (!error && data && data.length > 0) {
-          setCurrentDoc(data[0]);
-        } else {
-          setCurrentDoc(DEFAULT_STARTER_DOC);
-        }
+    async function loadInitialDoc() {
+      try {
+        const docs = await fetchAllDocuments();
+        if (!isMounted) return;
+        const activeDocs = docs.filter((d) => !d.is_archived);
+        setCurrentDoc(activeDocs.length > 0 ? activeDocs[0] : DEFAULT_STARTER_DOC);
       } catch (err) {
         console.error('Fetch home doc error:', err);
-        setCurrentDoc(DEFAULT_STARTER_DOC);
+        if (isMounted) setCurrentDoc(DEFAULT_STARTER_DOC);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
-    fetchFirstDoc();
-  }, [supabase]);
+    loadInitialDoc();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (loading || !currentDoc) {
     return (
