@@ -22,6 +22,8 @@ import {
   Loader2,
   AlertCircle,
   MoreHorizontal,
+  HelpCircle,
+  CopyPlus,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -35,6 +37,10 @@ interface TopNavProps {
   onToggleFavorite: () => void;
   saveStatus: 'saved' | 'saving' | 'error' | 'local';
   onOpenAI: () => void;
+  isSidecarOpen?: boolean;
+  onToggleSidecar?: () => void;
+  onDuplicate?: () => void;
+  onOpenShortcuts?: () => void;
   onDelete?: () => void;
   wordCount: number;
   onExportMarkdown: () => void;
@@ -49,6 +55,10 @@ export function TopNav({
   onToggleFavorite,
   saveStatus,
   onOpenAI,
+  isSidecarOpen,
+  onToggleSidecar,
+  onDuplicate,
+  onOpenShortcuts,
   onDelete,
   wordCount,
   onExportMarkdown,
@@ -144,14 +154,30 @@ export function TopNav({
           <span>{wordCount} words • {readingTime} min read</span>
         </div>
 
-        {/* Ask AI button with gradient accent */}
+        {/* Ask AI Copilot button with active state & gradient accent */}
         <button
-          onClick={onOpenAI}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 transition shadow-sm"
+          onClick={onToggleSidecar || onOpenAI}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition shadow-sm ${
+            isSidecarOpen
+              ? 'bg-purple-600 text-white shadow-purple-500/20 shadow-md'
+              : 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60'
+          }`}
+          title="Open Notion AI Copilot"
         >
-          <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+          <Sparkles className={`w-3.5 h-3.5 ${isSidecarOpen ? 'text-white' : 'text-purple-600 dark:text-purple-400 animate-pulse'}`} />
           <span>Ask AI</span>
         </button>
+
+        {/* Shortcuts Cheat Sheet trigger */}
+        {onOpenShortcuts && (
+          <button
+            onClick={onOpenShortcuts}
+            className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition hidden sm:flex"
+            title="Keyboard shortcuts & Markdown cheat sheet (Cmd + /)"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+        )}
 
         {/* Full-width toggle */}
         <button
@@ -252,6 +278,19 @@ export function TopNav({
                 <Printer className="w-3.5 h-3.5 text-neutral-500" />
                 <span>Print or Save PDF</span>
               </button>
+
+              {onDuplicate && (
+                <button
+                  onClick={() => {
+                    onDuplicate();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+                >
+                  <CopyPlus className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Duplicate Page</span>
+                </button>
+              )}
 
               {onDelete && (
                 <>

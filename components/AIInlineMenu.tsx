@@ -98,7 +98,7 @@ export function AIInlineMenu({
             <Sparkles className="w-3.5 h-3.5 animate-pulse" />
           </div>
           <span className="text-xs font-semibold text-purple-900 dark:text-purple-300">
-            Ask Notion AI (Gemini 1.5 Flash)
+            Ask Notion AI (Gemini 3.5 Flash)
           </span>
         </div>
         <button

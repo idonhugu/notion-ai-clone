@@ -11,6 +11,8 @@ import {
   X,
   Loader2,
   RotateCcw,
+  Languages,
+  ChevronDown,
 } from 'lucide-react';
 import { AIAction } from '@/lib/types';
 
@@ -21,6 +23,21 @@ interface AIFloatingMenuProps {
   position: { top: number; left: number } | null;
 }
 
+const LANGUAGES = [
+  'Spanish',
+  'French',
+  'German',
+  'Japanese',
+  'Chinese',
+  'Hindi',
+];
+
+const TONES = [
+  { label: 'Professional', value: 'professional' },
+  { label: 'Casual', value: 'casual' },
+  { label: 'Concise & Direct', value: 'concise' },
+];
+
 export function AIFloatingMenu({
   selectedText,
   onReplaceSelection,
@@ -29,16 +46,20 @@ export function AIFloatingMenu({
 }: AIFloatingMenuProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [streamedText, setStreamedText] = useState('');
-  const [activeAction, setActiveAction] = useState<AIAction | null>(null);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isTranslateOpen, setIsTranslateOpen] = useState(false);
+  const [isToneOpen, setIsToneOpen] = useState(false);
 
   if (!position || !selectedText) return null;
 
-  const handleAction = async (action: AIAction, tone?: 'concise' | 'professional' | 'casual') => {
+  const handleAction = async (action: string, options?: { tone?: string; language?: string }) => {
     setActiveAction(action);
     setIsLoading(true);
     setStreamedText('');
     setError(null);
+    setIsTranslateOpen(false);
+    setIsToneOpen(false);
 
     try {
       const res = await fetch('/api/ai', {
@@ -47,7 +68,8 @@ export function AIFloatingMenu({
         body: JSON.stringify({
           action,
           selectedText,
-          tone,
+          tone: options?.tone,
+          language: options?.language,
         }),
       });
 
@@ -88,16 +110,16 @@ export function AIFloatingMenu({
     <div
       style={{
         top: `${Math.max(10, position.top - 60)}px`,
-        left: `${Math.min(window.innerWidth - 380, Math.max(20, position.left))}px`,
+        left: `${Math.min(window.innerWidth - 440, Math.max(20, position.left))}px`,
       }}
-      className="fixed z-50 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl p-1.5 transition-all max-w-md w-max"
+      className="fixed z-50 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl p-1.5 transition-all max-w-lg w-max select-none"
     >
       {/* If no stream running yet, show clean action pills */}
       {!activeAction ? (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <div className="flex items-center gap-1 px-2 py-1 text-purple-600 dark:text-purple-400 font-semibold text-xs border-r border-neutral-200 dark:border-neutral-800">
             <Sparkles className="w-3.5 h-3.5" />
-            AI
+            <span>AI</span>
           </div>
 
           <button
@@ -105,7 +127,7 @@ export function AIFloatingMenu({
             className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
           >
             <Wand2 className="w-3 h-3 text-purple-500" />
-            Fix Spelling & Grammar
+            <span>Fix Grammar</span>
           </button>
 
           <button
@@ -113,7 +135,7 @@ export function AIFloatingMenu({
             className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
           >
             <FileText className="w-3 h-3 text-blue-500" />
-            Summarize
+            <span>Summarize</span>
           </button>
 
           <button
@@ -121,7 +143,7 @@ export function AIFloatingMenu({
             className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
           >
             <TrendingUp className="w-3 h-3 text-emerald-500" />
-            Make Longer
+            <span>Expand</span>
           </button>
 
           <button
@@ -129,8 +151,65 @@ export function AIFloatingMenu({
             className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
           >
             <Minimize2 className="w-3 h-3 text-amber-500" />
-            Simplify
+            <span>Simplify</span>
           </button>
+
+          {/* Tone shift selector */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setIsToneOpen(!isToneOpen);
+                setIsTranslateOpen(false);
+              }}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
+            >
+              <span>Tone</span>
+              <ChevronDown className="w-3 h-3 text-neutral-400" />
+            </button>
+
+            {isToneOpen && (
+              <div className="absolute left-0 top-8 z-50 w-36 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-xl p-1">
+                {TONES.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => handleAction('improve', { tone: t.value })}
+                    className="w-full text-left px-2 py-1 rounded text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Translation selector */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setIsTranslateOpen(!isTranslateOpen);
+                setIsToneOpen(false);
+              }}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
+            >
+              <Languages className="w-3 h-3 text-indigo-500" />
+              <span>Translate</span>
+              <ChevronDown className="w-3 h-3 text-neutral-400" />
+            </button>
+
+            {isTranslateOpen && (
+              <div className="absolute left-0 top-8 z-50 w-32 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-xl p-1">
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => handleAction('translate', { language: lang })}
+                    className="w-full text-left px-2 py-1 rounded text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition"
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={onClose}
@@ -145,10 +224,7 @@ export function AIFloatingMenu({
           <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-neutral-100 dark:border-neutral-800">
             <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
-              {activeAction === 'improve' && 'Fixing Spelling & Grammar...'}
-              {activeAction === 'summarize' && 'Summarizing selection...'}
-              {activeAction === 'longer' && 'Expanding content...'}
-              {activeAction === 'simplify' && 'Simplifying text...'}
+              <span>{isLoading ? 'Notion AI Writing...' : 'AI Revision'}</span>
             </span>
             <button
               onClick={onClose}

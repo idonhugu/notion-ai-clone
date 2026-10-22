@@ -4,7 +4,12 @@ export type AIAction =
   | 'summarize' 
   | 'improve' 
   | 'longer' 
-  | 'simplify';
+  | 'simplify'
+  | 'action_items'
+  | 'translate'
+  | 'eli5'
+  | 'table'
+  | 'chat';
 
 export interface AIPromptPayload {
   action: AIAction;

@@ -38,6 +38,9 @@ export function DocumentAttachments({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const visibleFiles = files.filter((f) => f.id !== '__kanban__');
+  const kanbanFiles = files.filter((f) => f.id === '__kanban__');
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -80,7 +83,7 @@ export function DocumentAttachments({
         newAttachments.push(fileObj);
 
         if (newAttachments.length === uploadedFiles.length) {
-          onUpdateFiles([...files, ...newAttachments]);
+          onUpdateFiles([...kanbanFiles, ...visibleFiles, ...newAttachments]);
           setIsUploading(false);
         }
       };
@@ -91,7 +94,7 @@ export function DocumentAttachments({
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onUpdateFiles(files.filter((f) => f.id !== id));
+    onUpdateFiles([...kanbanFiles, ...visibleFiles.filter((f) => f.id !== id)]);
   };
 
   const handleDownload = (file: AttachedFile, e: React.MouseEvent) => {
@@ -109,7 +112,7 @@ export function DocumentAttachments({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
           <Paperclip className="w-3.5 h-3.5" />
-          <span>Attachments & Documents ({files.length})</span>
+          <span>Attachments & Documents ({visibleFiles.length})</span>
         </div>
 
         {editable && (
@@ -132,7 +135,7 @@ export function DocumentAttachments({
       />
 
       {/* Drag & drop upload area if empty */}
-      {files.length === 0 && editable && (
+      {visibleFiles.length === 0 && editable && (
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -162,9 +165,9 @@ export function DocumentAttachments({
       )}
 
       {/* File list */}
-      {files.length > 0 && (
+      {visibleFiles.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-          {files.map((file) => (
+          {visibleFiles.map((file) => (
             <div
               key={file.id}
               onClick={(e) => handleDownload(file, e)}

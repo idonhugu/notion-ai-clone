@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
+import { FileText, Kanban, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { CoverImage } from './CoverImage';
 import { IconPicker } from './IconPicker';
@@ -10,6 +11,10 @@ import { AIInlineMenu } from './AIInlineMenu';
 import { AIFloatingMenu } from './AIFloatingMenu';
 import { TopNav } from './TopNav';
 import { DocumentAttachments } from './DocumentAttachments';
+import { AIChatSidecar } from './AIChatSidecar';
+import { KanbanBoard, KanbanCard } from './KanbanBoard';
+import { TaskProgressBar } from './TaskProgressBar';
+import { ShortcutsModal } from './ShortcutsModal';
 import { useTheme } from './ThemeProvider';
 import { Document, AttachedFile } from '@/lib/types';
 
@@ -37,10 +42,30 @@ export default function Editor({
   const [wordCount, setWordCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'local'>('saved');
 
-  // AI Popover states
+  // View state: Document Canvas vs Kanban Board
+  const [activeView, setActiveView] = useState<'document' | 'board'>('document');
+
+  // AI & Sidecar states
+  const [isSidecarOpen, setIsSidecarOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [docMarkdown, setDocMarkdown] = useState('');
+  const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
+
+  // Inline & Floating AI states
   const [showInlineAI, setShowInlineAI] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [floatingMenuPos, setFloatingMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Kanban Board Cards (persisted in attachments with id='__kanban__')
+  const [cards, setCards] = useState<KanbanCard[]>(() => {
+    const entry = (initialDoc.attachments || []).find((f: any) => f.id === '__kanban__');
+    if (entry && entry.url) {
+      try {
+        return JSON.parse(entry.url);
+      } catch {}
+    }
+    return [];
+  });
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -54,12 +79,15 @@ export default function Editor({
         : undefined,
   });
 
-  // Calculate live word count
-  const calculateWordCount = useCallback(() => {
+  // Calculate live word count & checklist progress
+  const analyzeDocument = useCallback(async () => {
     if (!editor) return;
     try {
       let count = 0;
-      editor.forEachBlock((block) => {
+      let checkTotal = 0;
+      let checkCompleted = 0;
+
+      editor.forEachBlock((block: any) => {
         if (Array.isArray(block.content)) {
           block.content.forEach((item: any) => {
             if (item.text) {
@@ -68,9 +96,22 @@ export default function Editor({
             }
           });
         }
+
+        if (block.type === 'checkListItem') {
+          checkTotal++;
+          if (block.props?.checked === true) {
+            checkCompleted++;
+          }
+        }
         return true;
       });
+
       setWordCount(count);
+      setChecklistStats({ total: checkTotal, completed: checkCompleted });
+
+      // Serialize text for AI sidecar
+      const md = await editor.blocksToMarkdownLossy(editor.document);
+      setDocMarkdown(md);
     } catch {
       // ignore parsing error
     }
@@ -80,7 +121,7 @@ export default function Editor({
   useEffect(() => {
     if (!editor) return;
 
-    calculateWordCount();
+    analyzeDocument();
 
     const handleSelectionChange = () => {
       try {
@@ -108,7 +149,7 @@ export default function Editor({
 
     const unsubscribe = editor.onSelectionChange(handleSelectionChange);
     return () => unsubscribe();
-  }, [editor, calculateWordCount]);
+  }, [editor, analyzeDocument]);
 
   // Save handler with debounce (1000ms)
   const saveDocument = useCallback(
@@ -171,11 +212,49 @@ export default function Editor({
   // Trigger save on editor content change
   const handleEditorChange = () => {
     if (!editor) return;
-    calculateWordCount();
+    analyzeDocument();
     saveDocument({ content: editor.document });
   };
 
-  // Keyboard navigation and spacebar / slash trigger
+  // Kanban update handler
+  const handleUpdateCards = (newCards: KanbanCard[]) => {
+    setCards(newCards);
+    const otherAttachments = attachments.filter((f) => f.id !== '__kanban__');
+    const kanbanEntry: AttachedFile = {
+      id: '__kanban__',
+      name: 'Project Kanban Board',
+      size: JSON.stringify(newCards).length,
+      type: 'application/vnd.notion.kanban+json',
+      url: JSON.stringify(newCards),
+      uploadedAt: new Date().toISOString(),
+    };
+    const updated = [...otherAttachments, kanbanEntry];
+    setAttachments(updated);
+    saveDocument({ attachments: updated });
+  };
+
+  // Duplicate current page
+  const handleDuplicatePage = async () => {
+    try {
+      const newDoc = {
+        title: `${title} (Copy)`,
+        content: editor?.document ?? [],
+        icon,
+        cover_image: coverImage,
+        is_favorite: false,
+        attachments,
+        user_id: 'admin-user',
+      };
+      const { data, error } = await supabase.from('documents').insert(newDoc).select().single();
+      if (!error && data) {
+        window.location.href = `/doc/${data.id}`;
+      }
+    } catch (err) {
+      console.error('Failed to duplicate page:', err);
+    }
+  };
+
+  // Keyboard navigation and spacebar trigger
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!editor) return;
 
@@ -211,7 +290,7 @@ export default function Editor({
         } else {
           editor.insertBlocks(parsedBlocks, editor.document[editor.document.length - 1], 'after');
         }
-        calculateWordCount();
+        analyzeDocument();
         saveDocument({ content: editor.document });
       }
     } catch (err) {
@@ -227,7 +306,7 @@ export default function Editor({
       const cursor = editor.getTextCursorPosition();
       if (cursor?.block && parsed.length > 0) {
         editor.replaceBlocks([cursor.block], parsed);
-        calculateWordCount();
+        analyzeDocument();
         saveDocument({ content: editor.document });
       }
     } catch (err) {
@@ -253,7 +332,7 @@ export default function Editor({
   };
 
   return (
-    <div className="relative min-h-screen bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 flex flex-col pb-40 transition-colors">
+    <div className="relative min-h-screen bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 flex flex-col transition-colors">
       {/* Top Navigation Bar with Breadcrumbs & Notion Controls */}
       <TopNav
         document={{ ...doc, title, icon, is_favorite: isFavorite }}
@@ -267,7 +346,11 @@ export default function Editor({
           saveDocument({ is_favorite: updated });
         }}
         saveStatus={saveStatus}
-        onOpenAI={() => setShowInlineAI(true)}
+        onOpenAI={() => setIsSidecarOpen(!isSidecarOpen)}
+        isSidecarOpen={isSidecarOpen}
+        onToggleSidecar={() => setIsSidecarOpen(!isSidecarOpen)}
+        onDuplicate={handleDuplicatePage}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onDelete={onDelete ? () => onDelete(doc.id) : undefined}
         wordCount={wordCount}
         onExportMarkdown={handleExportMarkdown}
@@ -282,70 +365,132 @@ export default function Editor({
         }}
       />
 
-      {/* Main Document Canvas */}
-      <div
-        className={`w-full mx-auto transition-all duration-200 ${
-          isFullWidth ? 'max-w-full px-8 md:px-20' : 'max-w-4xl px-6 md:px-16'
-        } pt-6`}
-        onKeyDown={handleKeyDown}
-      >
-        {/* Page Icon Picker (Clean single emoji) */}
-        <IconPicker
-          icon={icon}
-          onUpdate={(newIcon) => {
-            setIcon(newIcon);
-            saveDocument({ icon: newIcon });
-          }}
-        />
-
-        {/* Title Input */}
-        <input
-          ref={titleInputRef}
-          type="text"
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            saveDocument({ title: e.target.value });
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              editor?.focus();
-            }
-          }}
-          placeholder="Untitled"
-          className="w-full text-3xl md:text-4xl font-bold bg-transparent border-none outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-700 text-neutral-900 dark:text-neutral-100 mb-6 tracking-tight"
-        />
-
-        {/* Inline AI Menu triggered via Space or Button */}
-        {showInlineAI && (
-          <AIInlineMenu
-            isOpen={showInlineAI}
-            onClose={() => setShowInlineAI(false)}
-            onApply={handleInsertAIMarkdown}
-            documentContext={`Document Title: ${title}\nContent Snippet: ${JSON.stringify(
-              editor?.document?.slice(0, 5) || []
-            )}`}
+      {/* Main Workspace Row: Canvas + Dockable AI Copilot Drawer */}
+      <div className="flex flex-1 min-w-0">
+        <div
+          className={`flex-1 min-w-0 mx-auto transition-all duration-200 ${
+            isFullWidth ? 'max-w-full px-6 md:px-14' : 'max-w-4xl px-5 md:px-12'
+          } pt-6 pb-32`}
+          onKeyDown={handleKeyDown}
+        >
+          {/* Page Icon Picker (Clean single emoji) */}
+          <IconPicker
+            icon={icon}
+            onUpdate={(newIcon) => {
+              setIcon(newIcon);
+              saveDocument({ icon: newIcon });
+            }}
           />
-        )}
 
-        {/* Core BlockNote Editor Canvas with Dynamic Theme Matching */}
-        <div className="min-h-[450px]">
-          <BlockNoteView
-            editor={editor}
-            onChange={handleEditorChange}
-            theme={theme === 'dark' ? 'dark' : 'light'}
-            className="notion-editor-styles"
+          {/* Title Input */}
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              saveDocument({ title: e.target.value });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                editor?.focus();
+              }
+            }}
+            placeholder="Untitled"
+            className="w-full text-3xl md:text-4xl font-bold bg-transparent border-none outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-700 text-neutral-900 dark:text-neutral-100 mb-4 tracking-tight"
           />
+
+          {/* Notion View Switcher Tabs: Document Canvas vs Kanban Board */}
+          <div className="flex items-center gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-3 mb-6">
+            <button
+              onClick={() => setActiveView('document')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === 'document'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-xs'
+                  : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-900'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Document Canvas</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('board')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeView === 'board'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-xs'
+                  : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-900'
+              }`}
+            >
+              <Kanban className="w-3.5 h-3.5" />
+              <span>Project Board</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-neutral-200/60 dark:bg-neutral-700/60">
+                {cards.length}
+              </span>
+            </button>
+          </div>
+
+          {/* VIEW 1: Document Canvas */}
+          {activeView === 'document' && (
+            <div className="space-y-6">
+              {/* Task Checklist Progress Bar */}
+              <TaskProgressBar
+                total={checklistStats.total}
+                completed={checklistStats.completed}
+              />
+
+              {/* Inline AI Menu triggered via Space or Button */}
+              {showInlineAI && (
+                <AIInlineMenu
+                  isOpen={showInlineAI}
+                  onClose={() => setShowInlineAI(false)}
+                  onApply={handleInsertAIMarkdown}
+                  documentContext={`Document Title: ${title}\nContent Snippet: ${JSON.stringify(
+                    editor?.document?.slice(0, 5) || []
+                  )}`}
+                />
+              )}
+
+              {/* Core BlockNote Editor Canvas with Dynamic Theme Matching */}
+              <div className="min-h-[420px]">
+                <BlockNoteView
+                  editor={editor}
+                  onChange={handleEditorChange}
+                  theme={theme === 'dark' ? 'dark' : 'light'}
+                  className="notion-editor-styles"
+                />
+              </div>
+
+              {/* Document Attachments & Uploads */}
+              <DocumentAttachments
+                files={attachments}
+                onUpdateFiles={(newFiles) => {
+                  setAttachments(newFiles);
+                  saveDocument({ attachments: newFiles });
+                }}
+              />
+            </div>
+          )}
+
+          {/* VIEW 2: Kanban Board */}
+          {activeView === 'board' && (
+            <KanbanBoard
+              documentTitle={title}
+              documentContent={docMarkdown}
+              cards={cards}
+              onUpdateCards={handleUpdateCards}
+            />
+          )}
         </div>
 
-        {/* Document Attachments & Uploads */}
-        <DocumentAttachments
-          files={attachments}
-          onUpdateFiles={(newFiles) => {
-            setAttachments(newFiles);
-            saveDocument({ attachments: newFiles });
-          }}
+        {/* Dockable Notion AI Copilot Drawer ("Chat with your page") */}
+        <AIChatSidecar
+          isOpen={isSidecarOpen}
+          onClose={() => setIsSidecarOpen(false)}
+          documentTitle={title}
+          documentContent={docMarkdown}
+          onInsertIntoPage={handleInsertAIMarkdown}
         />
       </div>
 
@@ -358,6 +503,12 @@ export default function Editor({
           onReplaceSelection={handleReplaceSelectedText}
         />
       )}
+
+      {/* Keyboard Shortcuts Cheat Sheet Modal */}
+      <ShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
     </div>
   );
 }
