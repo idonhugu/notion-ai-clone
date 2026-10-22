@@ -10,13 +10,14 @@ import { IconPicker } from './IconPicker';
 import { AIInlineMenu } from './AIInlineMenu';
 import { AIFloatingMenu } from './AIFloatingMenu';
 import { TopNav } from './TopNav';
-import { DocumentAttachments } from './DocumentAttachments';
+import { DocumentAttachments, AttachedFile } from './DocumentAttachments';
 import { AIChatSidecar } from './AIChatSidecar';
 import { KanbanBoard, KanbanCard } from './KanbanBoard';
 import { TaskProgressBar } from './TaskProgressBar';
 import { ShortcutsModal } from './ShortcutsModal';
+import { SubPagesList } from './SubPagesList';
 import { useTheme } from './ThemeProvider';
-import { Document, AttachedFile } from '@/lib/types';
+import { Document } from '@/lib/types';
 
 interface EditorProps {
   document: Document;
@@ -48,6 +49,7 @@ export default function Editor({
   // AI & Sidecar states
   const [isSidecarOpen, setIsSidecarOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [selectedChatDoc, setSelectedChatDoc] = useState<AttachedFile | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
 
@@ -251,6 +253,29 @@ export default function Editor({
       }
     } catch (err) {
       console.error('Failed to duplicate page:', err);
+    }
+  };
+
+  // Create Subpage with AI extracted notes
+  const handleCreateSubpageWithNotes = async (subTitle: string, markdown: string) => {
+    try {
+      const parsedBlocks = editor ? await editor.tryParseMarkdownToBlocks(markdown) : [];
+      const newSub = {
+        title: subTitle,
+        content: parsedBlocks,
+        parent_id: doc.id,
+        user_id: 'admin-user',
+        icon: '📝',
+        is_favorite: false,
+        is_archived: false,
+        attachments: [],
+      };
+      const { data, error } = await supabase.from('documents').insert(newSub).select().single();
+      if (!error && data) {
+        window.location.href = `/doc/${data.id}`;
+      }
+    } catch (err) {
+      console.error('Failed to create subpage with notes:', err);
     }
   };
 
@@ -462,12 +487,21 @@ export default function Editor({
                 />
               </div>
 
-              {/* Document Attachments & Uploads */}
+              {/* Nested Sub-pages Section (Documents within notes) */}
+              <SubPagesList currentDocId={doc.id} />
+
+              {/* Document & PDF Attachments with AI Tools */}
               <DocumentAttachments
                 files={attachments}
                 onUpdateFiles={(newFiles) => {
                   setAttachments(newFiles);
                   saveDocument({ attachments: newFiles });
+                }}
+                onInsertIntoPage={handleInsertAIMarkdown}
+                onCreateSubpageWithNotes={handleCreateSubpageWithNotes}
+                onChatWithDocument={(file) => {
+                  setSelectedChatDoc(file);
+                  setIsSidecarOpen(true);
                 }}
               />
             </div>
@@ -484,12 +518,15 @@ export default function Editor({
           )}
         </div>
 
-        {/* Dockable Notion AI Copilot Drawer ("Chat with your page") */}
+        {/* Dockable Notion AI Copilot Drawer ("Chat with your page & documents") */}
         <AIChatSidecar
           isOpen={isSidecarOpen}
           onClose={() => setIsSidecarOpen(false)}
           documentTitle={title}
           documentContent={docMarkdown}
+          attachedFiles={attachments}
+          selectedDocument={selectedChatDoc}
+          onSelectDocument={setSelectedChatDoc}
           onInsertIntoPage={handleInsertAIMarkdown}
         />
       </div>

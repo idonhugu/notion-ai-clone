@@ -17,7 +17,11 @@ import {
   Lightbulb,
   Table as TableIcon,
   HelpCircle,
+  Paperclip,
+  BookOpen,
+  ChevronDown,
 } from 'lucide-react';
+import { AttachedFile } from './DocumentAttachments';
 
 interface ChatMessage {
   id: string;
@@ -30,6 +34,9 @@ interface AIChatSidecarProps {
   onClose: () => void;
   documentTitle: string;
   documentContent: string;
+  attachedFiles?: AttachedFile[];
+  selectedDocument?: AttachedFile | null;
+  onSelectDocument?: (file: AttachedFile | null) => void;
   onInsertIntoPage: (markdown: string) => void;
 }
 
@@ -38,20 +45,43 @@ export function AIChatSidecar({
   onClose,
   documentTitle,
   documentContent,
+  attachedFiles = [],
+  selectedDocument = null,
+  onSelectDocument,
   onInsertIntoPage,
 }: AIChatSidecarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: `👋 Hi Laksha! I'm your Notion AI Copilot. I'm connected to **"${documentTitle || 'Untitled'}"**.\n\nAsk me anything about this page, or pick a prompt below!`,
+      content: `👋 Hi Laksha! I'm your Notion AI Copilot. I'm connected to **"${
+        documentTitle || 'Untitled'
+      }"** and your attached documents.\n\nAsk me anything about this page or its PDFs, or pick a prompt below!`,
     },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [activeDoc, setActiveDoc] = useState<AttachedFile | null>(selectedDocument);
+  const [isDocDropdownOpen, setIsDocDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const visibleAttachments = attachedFiles.filter((f) => f.id !== '__kanban__');
+
+  useEffect(() => {
+    if (selectedDocument) {
+      setActiveDoc(selectedDocument);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ref_${Date.now()}`,
+          role: 'assistant',
+          content: `📄 Switched reference to **"${selectedDocument.name}"**. I can summarize it, extract key notes, or answer any questions about it!`,
+        },
+      ]);
+    }
+  }, [selectedDocument]);
 
   useEffect(() => {
     if (isOpen) {
@@ -91,6 +121,10 @@ export function AIChatSidecar({
           action: customAction || 'chat',
           prompt: query,
           context: `Document Title: ${documentTitle}\n\nDocument Body:\n${documentContent}`,
+          fileData: activeDoc ? activeDoc.url : undefined,
+          fileName: activeDoc ? activeDoc.name : undefined,
+          fileType: activeDoc ? activeDoc.type : undefined,
+          attachedDocs: activeDoc ? [activeDoc] : visibleAttachments,
         }),
       });
 
@@ -130,12 +164,39 @@ export function AIChatSidecar({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const quickPrompts = [
-    { label: 'Summarize page', action: 'summarize', icon: FileText, query: 'Summarize this page in 3 key takeaways' },
-    { label: 'Action items', action: 'action_items', icon: ListTodo, query: 'Extract all action items and tasks from this document' },
-    { label: 'Critique & gaps', action: 'chat', icon: Lightbulb, query: 'What is missing or unclear in this document? Give constructive feedback' },
-    { label: 'Explain like I’m 5', action: 'eli5', icon: HelpCircle, query: 'Explain the core idea of this note like I am 5 years old' },
-  ];
+  const quickPrompts = activeDoc
+    ? [
+        {
+          label: 'Summarize document',
+          action: 'doc_summarize',
+          icon: FileText,
+          query: `Summarize "${activeDoc.name}" in bullet points with core takeaways`,
+        },
+        {
+          label: 'Make structured notes',
+          action: 'doc_notes',
+          icon: BookOpen,
+          query: `Extract comprehensive study / meeting notes from "${activeDoc.name}"`,
+        },
+        {
+          label: 'Action items & tasks',
+          action: 'action_items',
+          icon: ListTodo,
+          query: `Extract all action items, deliverables, and deadlines from "${activeDoc.name}"`,
+        },
+        {
+          label: 'Explain like I’m 5',
+          action: 'eli5',
+          icon: HelpCircle,
+          query: `Explain the core concept of "${activeDoc.name}" like I am 5 years old`,
+        },
+      ]
+    : [
+        { label: 'Summarize page', action: 'summarize', icon: FileText, query: 'Summarize this page in 3 key takeaways' },
+        { label: 'Action items', action: 'action_items', icon: ListTodo, query: 'Extract all action items and tasks from this document' },
+        { label: 'Critique & gaps', action: 'chat', icon: Lightbulb, query: 'What is missing or unclear in this document? Give constructive feedback' },
+        { label: 'Explain like I’m 5', action: 'eli5', icon: HelpCircle, query: 'Explain the core idea of this note like I am 5 years old' },
+      ];
 
   return (
     <aside className="w-80 md:w-96 h-screen sticky top-0 flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-l border-neutral-200/80 dark:border-neutral-800 flex flex-col z-40 shadow-2xl transition-all duration-200 animate-in slide-in-from-right duration-200">
@@ -163,7 +224,7 @@ export function AIChatSidecar({
                 {
                   id: 'welcome',
                   role: 'assistant',
-                  content: `Cleared! Ask me anything about **"${documentTitle || 'Untitled'}"**.`,
+                  content: `Cleared! Ask me anything about **"${documentTitle || 'Untitled'}"** or your attached documents.`,
                 },
               ])
             }
@@ -180,6 +241,68 @@ export function AIChatSidecar({
           </button>
         </div>
       </div>
+
+      {/* Document Reference Pill Bar */}
+      {visibleAttachments.length > 0 && (
+        <div className="px-3 py-1.5 border-b border-neutral-100 dark:border-neutral-800/80 bg-neutral-50/70 dark:bg-neutral-900/40 relative">
+          <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
+              <Paperclip className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+              <span>Reference:</span>
+            </div>
+
+            <button
+              onClick={() => setIsDocDropdownOpen(!isDocDropdownOpen)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-950/50 hover:bg-purple-200/70 transition truncate max-w-[190px]"
+            >
+              <span className="truncate">{activeDoc ? activeDoc.name : `All ${visibleAttachments.length} Attachments`}</span>
+              <ChevronDown className="w-3 h-3 flex-shrink-0" />
+            </button>
+          </div>
+
+          {/* Reference Selector Dropdown */}
+          {isDocDropdownOpen && (
+            <div className="absolute right-3 top-8 z-50 w-56 bg-white dark:bg-[#222222] border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-xl p-1.5 text-xs animate-in fade-in duration-100">
+              <button
+                onClick={() => {
+                  setActiveDoc(null);
+                  onSelectDocument?.(null);
+                  setIsDocDropdownOpen(false);
+                }}
+                className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center justify-between transition ${
+                  !activeDoc
+                    ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold'
+                    : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <span>All Attached Documents</span>
+                {!activeDoc && <Check className="w-3 h-3 text-purple-600" />}
+              </button>
+
+              <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800 my-1" />
+
+              {visibleAttachments.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => {
+                    setActiveDoc(f);
+                    onSelectDocument?.(f);
+                    setIsDocDropdownOpen(false);
+                  }}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center justify-between transition truncate ${
+                    activeDoc?.id === f.id
+                      ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold'
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <span className="truncate">{f.name}</span>
+                  {activeDoc?.id === f.id && <Check className="w-3 h-3 text-purple-600 flex-shrink-0" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
@@ -242,10 +365,10 @@ export function AIChatSidecar({
       </div>
 
       {/* Quick Suggestions Chips */}
-      {messages.length <= 2 && (
+      {messages.length <= 4 && (
         <div className="p-2 border-t border-neutral-100 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30">
-          <div className="text-[10px] uppercase font-bold text-neutral-400 mb-1.5 px-1">
-            Suggested Actions
+          <div className="text-[10px] uppercase font-bold text-neutral-400 mb-1.5 px-1 flex items-center justify-between">
+            <span>{activeDoc ? `Prompts for ${activeDoc.name}` : 'Suggested Actions'}</span>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             {quickPrompts.map((q, idx) => {
@@ -279,7 +402,11 @@ export function AIChatSidecar({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask AI about this page..."
+            placeholder={
+              activeDoc
+                ? `Ask anything about ${activeDoc.name}...`
+                : 'Ask AI about this page or attached PDFs...'
+            }
             disabled={isLoading}
             className="w-full bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:outline-none placeholder:text-neutral-400"
           />

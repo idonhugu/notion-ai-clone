@@ -1,10 +1,22 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
+import { extractTextFromDataUrl } from '@/lib/documentParser';
 
 export async function POST(req: NextRequest) {
   try {
-    const { action, prompt, context, selectedText, tone, language, messages } = await req.json();
+    const {
+      action,
+      prompt,
+      context,
+      selectedText,
+      tone,
+      language,
+      fileData,
+      fileName,
+      fileType,
+      attachedDocs,
+    } = await req.json();
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
@@ -20,6 +32,29 @@ export async function POST(req: NextRequest) {
 
     const google = createGoogleGenerativeAI({ apiKey });
 
+    // Extract text from primary file if provided
+    let extractedDocText = '';
+    if (fileData) {
+      extractedDocText = await extractTextFromDataUrl(
+        fileData,
+        fileName || 'document',
+        fileType || ''
+      );
+    }
+
+    // Extract text from attached docs bundle if provided
+    let attachedBundleText = '';
+    if (Array.isArray(attachedDocs) && attachedDocs.length > 0) {
+      const texts: string[] = [];
+      for (const doc of attachedDocs.slice(0, 3)) {
+        if (doc.url && doc.id !== '__kanban__') {
+          const t = await extractTextFromDataUrl(doc.url, doc.name, doc.type);
+          texts.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${t}`);
+        }
+      }
+      attachedBundleText = texts.join('\n\n');
+    }
+
     let systemInstruction = `You are Notion AI, an expert, thoughtful, and highly capable writing assistant embedded inside an enterprise block-based document editor.
 Always format your output in clean, crisp Markdown (using #, ##, ### for headings, bullet points -, numbered lists 1., checkboxes - [ ], blockquotes >, and code fences \`\`\` when appropriate).
 DO NOT wrap the entire answer in a top-level markdown code fence unless asked for raw code.
@@ -29,10 +64,58 @@ Deliver pure, well-structured, publication-grade content.`;
     let userPrompt = '';
 
     switch (action) {
+      case 'doc_summarize':
+        userPrompt = `You are analyzing the attached document: "${fileName || 'Document'}".
+Provide an executive summary formatted with:
+# Executive Summary: ${fileName || 'Document'}
+
+> (2-3 sentence high-level overview of the document's core thesis and purpose)
+
+## 🔑 Key Takeaways & Major Findings
+(4-6 crisp bullet points with **bold** highlights)
+
+## ⚡ Critical Data & Insights
+(Key figures, dates, methodologies, or findings discussed)
+
+## 🎯 Action Items & Next Steps
+- [ ] Concrete next step 1
+- [ ] Concrete next step 2
+
+Document Content:
+"""
+${extractedDocText || context || 'No document content extracted.'}
+"""`;
+        break;
+
+      case 'doc_notes':
+        userPrompt = `You are an expert research assistant and note-taker. Transform the attached document "${fileName || 'Document'}" into comprehensive, beautifully organized Notion-style notes:
+
+# 📝 Notes: ${fileName || 'Document'}
+
+## 🎯 Major Concepts & Key Ideas
+(Define the primary concepts and terminology introduced in the document)
+
+## 📋 Comprehensive Notes & Analysis
+(Break down the document section by section with bullet points, examples, and structured details)
+
+## 💡 Notable Highlights & Quotes
+> (Direct or synthesized key takeaways)
+
+## ✅ Action Items & Key Follow-ups
+- [ ] Prioritized next step 1
+- [ ] Prioritized next step 2
+
+Document Content:
+"""
+${extractedDocText || context || 'No document content extracted.'}
+"""`;
+        break;
+
       case 'generate':
         userPrompt = `Generate a comprehensive, structured document section or draft based on the following instructions:
 Prompt: "${prompt || 'Write a comprehensive guide'}"
-${context ? `Context from the current document:\n${context}` : ''}`;
+${context ? `Context from the current document:\n${context}` : ''}
+${attachedBundleText ? `\nAttached Document References:\n${attachedBundleText}` : ''}`;
         break;
 
       case 'continue':
@@ -95,10 +178,19 @@ ${context ? `Context from the current document:\n${context}` : ''}`;
         break;
 
       case 'chat':
-        systemInstruction = `You are Notion AI Copilot, an intelligent workspace sidecar assistant. You have full visibility into the author's active document.
-Use the provided document context to give insightful, accurate, and direct answers.
-If the user asks to draft, rewrite, or brainstorm, respond in clean Markdown with bolding and bullet points.`;
-        userPrompt = `Document Context:\n"""\n${context || 'No document text yet.'}\n"""\n\nUser Question/Request:\n"${prompt}"`;
+        systemInstruction = `You are Notion AI Copilot, an intelligent workspace sidecar assistant. You have full visibility into the author's active document and any attached files (including PDFs, docs, spreadsheets).
+Use the provided document context and attached files to give insightful, accurate, and direct answers.
+When citing facts from attached documents, mention the document name.
+Format responses in clean Markdown with bolding, lists, and quotes.`;
+        userPrompt = `Active Document Context:
+"""
+${context || 'No document text yet.'}
+"""
+
+${attachedBundleText ? `Attached Files & Referenced PDFs:\n${attachedBundleText}\n` : ''}
+
+User Question/Request:
+"${prompt}"`;
         break;
 
       default:
