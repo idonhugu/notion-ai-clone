@@ -165,8 +165,13 @@ export function Sidebar({
   };
 
   const handleSignOut = async () => {
+    document.cookie = 'notion_admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('notion_user');
+    }
     await supabase.auth.signOut();
     router.push('/login');
+    router.refresh();
   };
 
   // Render recursive tree item
@@ -371,10 +376,13 @@ export function Sidebar({
       {/* Footer User Info & Sign Out */}
       <div className="p-3 border-t border-neutral-200/60 dark:border-neutral-800 flex items-center justify-between text-xs text-neutral-500">
         <div className="truncate max-w-[150px]">
-          <div className="font-medium text-neutral-800 dark:text-neutral-200 truncate">
-            {userEmail || 'Demo Account'}
+          <div className="font-semibold text-neutral-800 dark:text-neutral-200 truncate flex items-center gap-1.5">
+            <span>{userEmail || 'Laksha'}</span>
+            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold">
+              Admin
+            </span>
           </div>
-          <div className="text-[10px] text-neutral-400">Notion Free Tier</div>
+          <div className="text-[10px] text-neutral-400">Notion AI Workspace</div>
         </div>
         <button
           onClick={handleSignOut}

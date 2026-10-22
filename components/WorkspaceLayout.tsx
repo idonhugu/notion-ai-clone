@@ -122,6 +122,16 @@ export function WorkspaceLayout({
 
   // Load documents
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('notion_user');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setUserEmail(parsed.name || parsed.username || 'Laksha');
+        } catch {}
+      }
+    }
+
     async function loadDocs() {
       try {
         const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
