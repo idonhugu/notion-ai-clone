@@ -20,6 +20,7 @@ import {
   Paperclip,
   BookOpen,
   ChevronDown,
+  Quote,
 } from 'lucide-react';
 import { AttachedFile } from './DocumentAttachments';
 
@@ -64,6 +65,14 @@ export function AIChatSidecar({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeDoc, setActiveDoc] = useState<AttachedFile | null>(selectedDocument);
   const [isDocDropdownOpen, setIsDocDropdownOpen] = useState(false);
+  const [includeSources, setIncludeSources] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('notion_ai_cite_sources');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -125,6 +134,7 @@ export function AIChatSidecar({
           fileName: activeDoc ? activeDoc.name : undefined,
           fileType: activeDoc ? activeDoc.type : undefined,
           attachedDocs: activeDoc ? [activeDoc] : visibleAttachments,
+          includeSources,
         }),
       });
 
@@ -164,6 +174,13 @@ export function AIChatSidecar({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleToggleSources = (checked: boolean) => {
+    setIncludeSources(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('notion_ai_cite_sources', String(checked));
+    }
+  };
+
   const quickPrompts = activeDoc
     ? [
         {
@@ -199,70 +216,104 @@ export function AIChatSidecar({
       ];
 
   return (
-    <aside className="w-80 md:w-96 h-screen sticky top-0 flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-l border-neutral-200/80 dark:border-neutral-800 flex flex-col z-40 shadow-2xl transition-all duration-200 animate-in slide-in-from-right duration-200">
-      {/* Header */}
-      <div className="p-3.5 border-b border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between bg-[#fbfbfa] dark:bg-[#1f1f1f]">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center shadow-sm">
-            <Sparkles className="w-3.5 h-3.5" />
+    <>
+      {/* Mobile Backdrop overlay */}
+      <div
+        className="fixed inset-0 z-40 md:hidden bg-black/40 backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+      />
+
+      <aside className="fixed inset-y-0 right-0 z-50 w-full sm:w-96 md:static md:sticky md:top-0 h-screen flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-l border-neutral-200/80 dark:border-neutral-800 flex flex-col shadow-2xl transition-all duration-200 animate-in slide-in-from-right duration-200">
+        {/* Header */}
+        <div className="p-3.5 border-b border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between bg-[#fbfbfa] dark:bg-[#1f1f1f]">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center shadow-xs">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="font-semibold text-xs text-neutral-800 dark:text-neutral-100 flex items-center gap-1.5">
+                <span>Notion AI Copilot</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <div className="text-[10px] text-neutral-400 truncate max-w-[170px]">
+                {documentTitle || 'Untitled'}
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="font-semibold text-xs text-neutral-800 dark:text-neutral-100 flex items-center gap-1.5">
-              <span>Notion AI Copilot</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            </div>
-            <div className="text-[10px] text-neutral-400 truncate max-w-[170px]">
-              {documentTitle || 'Untitled'}
-            </div>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() =>
-              setMessages([
-                {
-                  id: 'welcome',
-                  role: 'assistant',
-                  content: `Cleared! Ask me anything about **"${documentTitle || 'Untitled'}"** or your attached documents.`,
-                },
-              ])
-            }
-            title="Clear conversation"
-            className="p-1 rounded text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-800"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1 rounded text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-800"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Document Reference Pill Bar */}
-      {visibleAttachments.length > 0 && (
-        <div className="px-3 py-1.5 border-b border-neutral-100 dark:border-neutral-800/80 bg-neutral-50/70 dark:bg-neutral-900/40 relative">
-          <div className="flex items-center justify-between text-[11px]">
-            <div className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
-              <Paperclip className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-              <span>Reference:</span>
-            </div>
-
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => setIsDocDropdownOpen(!isDocDropdownOpen)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-950/50 hover:bg-purple-200/70 transition truncate max-w-[190px]"
+              onClick={() =>
+                setMessages([
+                  {
+                    id: 'welcome',
+                    role: 'assistant',
+                    content: `Cleared! Ask me anything about **"${documentTitle || 'Untitled'}"** or your attached documents.`,
+                  },
+                ])
+              }
+              title="Clear conversation"
+              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition"
             >
-              <span className="truncate">{activeDoc ? activeDoc.name : `All ${visibleAttachments.length} Attachments`}</span>
-              <ChevronDown className="w-3 h-3 flex-shrink-0" />
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* Document Reference Pill Bar & Source Citation Switch */}
+        <div className="px-3 py-1.5 border-b border-neutral-100 dark:border-neutral-800/80 bg-neutral-50/70 dark:bg-neutral-900/40 relative flex items-center justify-between gap-2">
+          {visibleAttachments.length > 0 ? (
+            <div className="flex items-center justify-between w-full text-[11px]">
+              <div className="flex items-center gap-1 text-neutral-500 dark:text-neutral-400 truncate">
+                <Paperclip className="w-3 h-3 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                <span className="hidden sm:inline">Ref:</span>
+                <button
+                  onClick={() => setIsDocDropdownOpen(!isDocDropdownOpen)}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded font-medium text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-950/50 hover:bg-purple-200/70 transition truncate max-w-[140px] sm:max-w-[160px]"
+                >
+                  <span className="truncate">{activeDoc ? activeDoc.name : `All (${visibleAttachments.length})`}</span>
+                  <ChevronDown className="w-2.5 h-2.5 flex-shrink-0" />
+                </button>
+              </div>
+
+              {/* Citations Toggle */}
+              <label className="flex items-center gap-1 cursor-pointer text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 select-none flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={includeSources}
+                  onChange={(e) => handleToggleSources(e.target.checked)}
+                  className="w-3 h-3 rounded text-purple-600 accent-purple-600 cursor-pointer"
+                />
+                <span className="text-[10px] font-medium flex items-center gap-0.5">
+                  <Quote className="w-2.5 h-2.5" />
+                  <span>Citations</span>
+                </span>
+              </label>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between w-full text-[10px] text-neutral-400">
+              <span>Connected to page content</span>
+              <label className="flex items-center gap-1 cursor-pointer text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 select-none">
+                <input
+                  type="checkbox"
+                  checked={includeSources}
+                  onChange={(e) => handleToggleSources(e.target.checked)}
+                  className="w-3 h-3 rounded text-purple-600 accent-purple-600 cursor-pointer"
+                />
+                <span className="text-[10px] font-medium">Auto-cite</span>
+              </label>
+            </div>
+          )}
 
           {/* Reference Selector Dropdown */}
-          {isDocDropdownOpen && (
-            <div className="absolute right-3 top-8 z-50 w-56 bg-white dark:bg-[#222222] border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-xl p-1.5 text-xs animate-in fade-in duration-100">
+          {isDocDropdownOpen && visibleAttachments.length > 0 && (
+            <div className="absolute left-3 top-8 z-50 w-56 bg-white dark:bg-[#222222] border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-xl p-1.5 text-xs animate-in fade-in duration-100">
               <button
                 onClick={() => {
                   setActiveDoc(null);
@@ -302,123 +353,123 @@ export function AIChatSidecar({
             </div>
           )}
         </div>
-      )}
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
-        {messages.map((msg) => {
-          const isUser = msg.role === 'user';
-          return (
-            <div key={msg.id} className={`flex gap-2 text-xs ${isUser ? 'justify-end' : 'justify-start'}`}>
-              {!isUser && (
-                <div className="w-6 h-6 rounded-md bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5" />
+        {/* Messages Scroll Area */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
+          {messages.map((msg) => {
+            const isUser = msg.role === 'user';
+            return (
+              <div key={msg.id} className={`flex gap-2 text-xs ${isUser ? 'justify-end' : 'justify-start'}`}>
+                {!isUser && (
+                  <div className="w-6 h-6 rounded-md bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Bot className="w-3.5 h-3.5" />
+                  </div>
+                )}
+
+                <div
+                  className={`max-w-[85%] rounded-xl px-3 py-2 leading-relaxed ${
+                    isUser
+                      ? 'bg-purple-600 text-white rounded-tr-none'
+                      : 'bg-neutral-100 dark:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-neutral-200/50 dark:border-neutral-700/50 rounded-tl-none'
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap font-sans">{msg.content || (
+                    <span className="flex items-center gap-1 text-neutral-400 italic">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Thinking...
+                    </span>
+                  )}</div>
+
+                  {/* Assistant message action bar */}
+                  {!isUser && msg.content && msg.id !== 'welcome' && (
+                    <div className="flex items-center justify-end gap-1 mt-2 pt-1.5 border-t border-neutral-200/40 dark:border-neutral-700/40 text-[11px] text-neutral-500">
+                      <button
+                        onClick={() => handleCopy(msg.id, msg.content)}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+                        title="Copy response"
+                      >
+                        {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
+                      </button>
+                      <button
+                        onClick={() => onInsertIntoPage(msg.content)}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded bg-purple-600/10 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600/20 font-medium transition"
+                        title="Insert directly into document canvas"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Insert to Page</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              <div
-                className={`max-w-[85%] rounded-xl px-3 py-2 leading-relaxed ${
-                  isUser
-                    ? 'bg-purple-600 text-white rounded-tr-none'
-                    : 'bg-neutral-100 dark:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-neutral-200/50 dark:border-neutral-700/50 rounded-tl-none'
-                }`}
-              >
-                <div className="whitespace-pre-wrap font-sans">{msg.content || (
-                  <span className="flex items-center gap-1 text-neutral-400 italic">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Thinking...
-                  </span>
-                )}</div>
-
-                {/* Assistant message action bar */}
-                {!isUser && msg.content && msg.id !== 'welcome' && (
-                  <div className="flex items-center justify-end gap-1 mt-2 pt-1.5 border-t border-neutral-200/40 dark:border-neutral-700/40 text-[11px] text-neutral-500">
-                    <button
-                      onClick={() => handleCopy(msg.id, msg.content)}
-                      className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
-                      title="Copy response"
-                    >
-                      {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
-                    </button>
-                    <button
-                      onClick={() => onInsertIntoPage(msg.content)}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded bg-purple-600/10 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600/20 font-medium transition"
-                      title="Insert directly into document canvas"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>Insert to Page</span>
-                    </button>
+                {isUser && (
+                  <div className="w-6 h-6 rounded-md bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <User className="w-3.5 h-3.5" />
                   </div>
                 )}
               </div>
-
-              {isUser && (
-                <div className="w-6 h-6 rounded-md bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Quick Suggestions Chips */}
-      {messages.length <= 4 && (
-        <div className="p-2 border-t border-neutral-100 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30">
-          <div className="text-[10px] uppercase font-bold text-neutral-400 mb-1.5 px-1 flex items-center justify-between">
-            <span>{activeDoc ? `Prompts for ${activeDoc.name}` : 'Suggested Actions'}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {quickPrompts.map((q, idx) => {
-              const Icon = q.icon;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => handleSend(q.query, q.action)}
-                  className="flex items-center gap-1.5 p-1.5 rounded-lg border border-neutral-200/60 dark:border-neutral-700/60 bg-white dark:bg-neutral-800 text-[11px] text-neutral-700 dark:text-neutral-300 hover:border-purple-300 dark:hover:border-purple-800 hover:text-purple-600 dark:hover:text-purple-300 transition text-left"
-                >
-                  <Icon className="w-3 h-3 text-purple-500 flex-shrink-0" />
-                  <span className="truncate">{q.label}</span>
-                </button>
-              );
-            })}
-          </div>
+            );
+          })}
+          <div ref={messagesEndRef} />
         </div>
-      )}
 
-      {/* Input Form */}
-      <div className="p-3 border-t border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#1a1a1a]">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSend();
-          }}
-          className="flex items-center gap-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-xl px-3 py-2 border border-neutral-200/80 dark:border-neutral-700/80 focus-within:border-purple-500 transition"
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              activeDoc
-                ? `Ask anything about ${activeDoc.name}...`
-                : 'Ask AI about this page or attached PDFs...'
-            }
-            disabled={isLoading}
-            className="w-full bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:outline-none placeholder:text-neutral-400"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="p-1 rounded-lg bg-purple-600 text-white disabled:opacity-40 hover:bg-purple-700 transition"
+        {/* Quick Suggestions Chips */}
+        {messages.length <= 4 && (
+          <div className="p-2 border-t border-neutral-100 dark:border-neutral-800/80 bg-neutral-50/50 dark:bg-neutral-900/30">
+            <div className="text-[10px] uppercase font-bold text-neutral-400 mb-1.5 px-1 flex items-center justify-between">
+              <span>{activeDoc ? `Prompts for ${activeDoc.name}` : 'Suggested Actions'}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {quickPrompts.map((q, idx) => {
+                const Icon = q.icon;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(q.query, q.action)}
+                    className="flex items-center gap-1.5 p-1.5 rounded-lg border border-neutral-200/60 dark:border-neutral-700/60 bg-white dark:bg-neutral-800 text-[11px] text-neutral-700 dark:text-neutral-300 hover:border-purple-300 dark:hover:border-purple-800 hover:text-purple-600 dark:hover:text-purple-300 transition text-left"
+                  >
+                    <Icon className="w-3 h-3 text-purple-500 flex-shrink-0" />
+                    <span className="truncate">{q.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Input Form */}
+        <div className="p-3 border-t border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#1a1a1a]">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+            className="flex items-center gap-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-xl px-3 py-2 border border-neutral-200/80 dark:border-neutral-700/80 focus-within:border-purple-500 transition"
           >
-            {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-          </button>
-        </form>
-      </div>
-    </aside>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                activeDoc
+                  ? `Ask anything about ${activeDoc.name}...`
+                  : 'Ask AI about this page or attached PDFs...'
+              }
+              disabled={isLoading}
+              className="w-full bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:outline-none placeholder:text-neutral-400"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || isLoading}
+              className="p-1 rounded-lg bg-purple-600 text-white disabled:opacity-40 hover:bg-purple-700 transition"
+            >
+              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            </button>
+          </form>
+        </div>
+      </aside>
+    </>
   );
 }

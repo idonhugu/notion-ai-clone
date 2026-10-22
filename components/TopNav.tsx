@@ -85,9 +85,9 @@ export function TopNav({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between px-4 md:px-6 py-2.5 bg-white/90 dark:bg-[#191919]/90 backdrop-blur-md border-b border-neutral-100 dark:border-neutral-800/80 transition-colors">
+    <header className="sticky top-0 z-30 flex items-center justify-between px-3 md:px-6 py-2.5 bg-white/90 dark:bg-[#191919]/90 backdrop-blur-md border-b border-neutral-100 dark:border-neutral-800/80 transition-colors">
       {/* Left: Breadcrumbs & Save Indicator */}
-      <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 min-w-0 pr-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-neutral-500 dark:text-neutral-400 min-w-0 pr-2 pl-9 md:pl-0">
         <Link
           href="/"
           className="hover:text-neutral-900 dark:hover:text-neutral-100 transition truncate hidden sm:inline"

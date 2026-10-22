@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       fileName,
       fileType,
       attachedDocs,
+      includeSources = true,
     } = await req.json();
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -61,6 +62,21 @@ DO NOT wrap the entire answer in a top-level markdown code fence unless asked fo
 DO NOT include conversational filler like "Here is your response:", "Sure, I can help with that", or "Let me know if you need anything else".
 Deliver pure, well-structured, publication-grade content.`;
 
+    const sourcesInstruction = includeSources
+      ? `\n\nAt the end of your response, append this structured citation block:
+---
+### 📚 Sources & Citations
+- **Primary Source:** \`${fileName || 'Active Document'}\`
+- **File Type:** ${fileType || 'Document'}
+- **Generated On:** ${new Date().toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })}
+- **Model Engine:** Google Gemini 3.5 Flash
+- **Source Verification:** Key conclusions and data points directly reference content extracted from \`${fileName || 'Active Document'}\`.`
+      : '';
+
     let userPrompt = '';
 
     switch (action) {
@@ -84,7 +100,8 @@ Provide an executive summary formatted with:
 Document Content:
 """
 ${extractedDocText || context || 'No document content extracted.'}
-"""`;
+"""
+${sourcesInstruction}`;
         break;
 
       case 'doc_notes':
@@ -108,14 +125,16 @@ ${extractedDocText || context || 'No document content extracted.'}
 Document Content:
 """
 ${extractedDocText || context || 'No document content extracted.'}
-"""`;
+"""
+${sourcesInstruction}`;
         break;
 
       case 'generate':
         userPrompt = `Generate a comprehensive, structured document section or draft based on the following instructions:
 Prompt: "${prompt || 'Write a comprehensive guide'}"
 ${context ? `Context from the current document:\n${context}` : ''}
-${attachedBundleText ? `\nAttached Document References:\n${attachedBundleText}` : ''}`;
+${attachedBundleText ? `\nAttached Document References:\n${attachedBundleText}` : ''}
+${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         break;
 
       case 'continue':
@@ -128,7 +147,8 @@ ${attachedBundleText ? `\nAttached Document References:\n${attachedBundleText}` 
       case 'summarize':
         userPrompt = `Provide a crisp, actionable executive summary of the following document content. Use bullet points for key takeaways:\n\n"""\n${
           selectedText || context || prompt || ''
-        }\n"""`;
+        }\n"""
+${includeSources ? sourcesInstruction : ''}`;
         break;
 
       case 'improve':
@@ -155,7 +175,8 @@ ${attachedBundleText ? `\nAttached Document References:\n${attachedBundleText}` 
       case 'action_items':
         userPrompt = `Carefully analyze the following document content and extract a comprehensive, prioritized checklist of concrete action items and next steps. Format each item as a markdown checklist (- [ ] Item):\n\n"""\n${
           selectedText || context || prompt || ''
-        }\n"""`;
+        }\n"""
+${includeSources ? sourcesInstruction : ''}`;
         break;
 
       case 'translate':
@@ -190,7 +211,8 @@ ${context || 'No document text yet.'}
 ${attachedBundleText ? `Attached Files & Referenced PDFs:\n${attachedBundleText}\n` : ''}
 
 User Question/Request:
-"${prompt}"`;
+"${prompt}"
+${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         break;
 
       default:

@@ -394,8 +394,8 @@ export default function Editor({
       <div className="flex flex-1 min-w-0">
         <div
           className={`flex-1 min-w-0 mx-auto transition-all duration-200 ${
-            isFullWidth ? 'max-w-full px-6 md:px-14' : 'max-w-4xl px-5 md:px-12'
-          } pt-6 pb-32`}
+            isFullWidth ? 'max-w-full px-4 sm:px-8 md:px-14' : 'max-w-4xl px-3.5 sm:px-6 md:px-12'
+          } pt-5 pb-32`}
           onKeyDown={handleKeyDown}
         >
           {/* Page Icon Picker (Clean single emoji) */}
@@ -423,7 +423,7 @@ export default function Editor({
               }
             }}
             placeholder="Untitled"
-            className="w-full text-3xl md:text-4xl font-bold bg-transparent border-none outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-700 text-neutral-900 dark:text-neutral-100 mb-4 tracking-tight"
+            className="w-full text-2xl sm:text-3xl md:text-4xl font-bold bg-transparent border-none outline-none placeholder:text-neutral-300 dark:placeholder:text-neutral-700 text-neutral-900 dark:text-neutral-100 mb-4 tracking-tight"
           />
 
           {/* Notion View Switcher Tabs: Document Canvas vs Kanban Board */}

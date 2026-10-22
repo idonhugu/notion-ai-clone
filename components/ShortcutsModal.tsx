@@ -67,19 +67,19 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-[#1f1f1f] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-[#1f1f1f] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-800 bg-[#fbfbfa] dark:bg-[#191919]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-neutral-200/80 dark:bg-neutral-800 flex items-center justify-center text-neutral-800 dark:text-neutral-200">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-neutral-200/80 dark:border-neutral-800 bg-[#fbfbfa] dark:bg-[#191919]">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-neutral-200/80 dark:bg-neutral-800 flex items-center justify-center text-neutral-800 dark:text-neutral-200 flex-shrink-0">
               <Command className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+              <h3 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-neutral-100">
                 Keyboard Shortcuts & Markdown
               </h3>
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-[10px] sm:text-[11px] text-neutral-500">
                 Power up your workflow with Notion-grade accelerators
               </p>
             </div>
@@ -94,7 +94,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
           {sections.map((section, idx) => {
             const Icon = section.icon;
             return (

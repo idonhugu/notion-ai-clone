@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Plus,
   Trash2,
@@ -55,6 +55,12 @@ export function KanbanBoard({
   const [activeInputColumn, setActiveInputColumn] = useState<ColumnId | null>(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
+  const columnRefs = useRef<Record<ColumnId, HTMLDivElement | null>>({
+    todo: null,
+    in_progress: null,
+    review: null,
+    done: null,
+  });
 
   // Add a new card to a specific column
   const handleAddCard = (colId: ColumnId) => {
@@ -177,6 +183,10 @@ export function KanbanBoard({
     setDraggedCardId(null);
   };
 
+  const scrollToColumn = (colId: ColumnId) => {
+    columnRefs.current[colId]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  };
+
   const priorityStyles: Record<Priority, { label: string; class: string }> = {
     high: {
       label: 'High',
@@ -195,9 +205,9 @@ export function KanbanBoard({
   return (
     <div className="w-full pb-16 animate-in fade-in duration-200">
       {/* Board Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
             <span>Project Tasks & Kanban</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-normal">
               {cards.length} {cards.length === 1 ? 'task' : 'tasks'}
@@ -208,23 +218,41 @@ export function KanbanBoard({
           </p>
         </div>
 
-        {/* AI Task Generator */}
+        {/* AI Task Generator Button */}
         <button
           onClick={handleAIGenerateTasks}
           disabled={isGeneratingAI}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-sm disabled:opacity-50 transition"
+          className="self-start sm:self-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-xs disabled:opacity-50 transition"
         >
           {isGeneratingAI ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <Sparkles className="w-3.5 h-3.5" />
           )}
-          <span>{isGeneratingAI ? 'Extracting Action Items...' : '✨ AI Generate Tasks'}</span>
+          <span>{isGeneratingAI ? 'Extracting Tasks...' : '✨ AI Generate Tasks'}</span>
         </button>
       </div>
 
-      {/* Kanban Columns Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Mobile Column Quick Jump Pills (Visible on small screens) */}
+      <div className="flex sm:hidden items-center gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-none">
+        {COLUMNS.map((col) => {
+          const count = cards.filter((c) => c.columnId === col.id).length;
+          return (
+            <button
+              key={col.id}
+              onClick={() => scrollToColumn(col.id)}
+              className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200/60 dark:border-neutral-700/60"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${col.color}`} />
+              <span>{col.title}</span>
+              <span className="text-[10px] text-neutral-400">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Kanban Columns: Horizontal Touch-Snap on Mobile, Grid on Desktop */}
+      <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 overflow-x-auto pb-6 pt-1 snap-x snap-mandatory scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0">
         {COLUMNS.map((col) => {
           const columnCards = cards.filter((c) => c.columnId === col.id);
           const isInputActive = activeInputColumn === col.id;
@@ -232,9 +260,12 @@ export function KanbanBoard({
           return (
             <div
               key={col.id}
+              ref={(el) => {
+                columnRefs.current[col.id] = el;
+              }}
               onDragOver={handleDragOver}
               onDrop={() => handleDrop(col.id)}
-              className="flex flex-col bg-neutral-100/70 dark:bg-[#1a1a1a]/80 rounded-2xl border border-neutral-200/80 dark:border-neutral-800/80 p-3 min-h-[420px] transition"
+              className="flex-shrink-0 w-[84vw] max-w-[340px] sm:max-w-none sm:w-auto snap-center flex flex-col bg-neutral-100/70 dark:bg-[#1a1a1a]/80 rounded-2xl border border-neutral-200/80 dark:border-neutral-800/80 p-3 min-h-[420px] transition"
             >
               {/* Column Header */}
               <div className="flex items-center justify-between mb-3 px-1">
@@ -320,7 +351,7 @@ export function KanbanBoard({
                       key={card.id}
                       draggable
                       onDragStart={() => handleDragStart(card.id)}
-                      className="group bg-white dark:bg-[#222222] p-3 rounded-xl border border-neutral-200/80 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing select-none"
+                      className="group bg-white dark:bg-[#222222] p-3 rounded-xl border border-neutral-200/80 dark:border-neutral-800 shadow-xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing select-none"
                     >
                       <div className="flex items-start justify-between gap-1 mb-2">
                         <button
@@ -331,14 +362,14 @@ export function KanbanBoard({
                           {pConfig.label}
                         </button>
 
-                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition">
+                        <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex items-center gap-0.5 transition">
                           {colIdx > 0 && (
                             <button
                               onClick={() => handleMoveCard(card.id, 'prev')}
                               className="p-1 rounded text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
                               title="Move left"
                             >
-                              <ChevronLeft className="w-3 h-3" />
+                              <ChevronLeft className="w-3.5 h-3.5" />
                             </button>
                           )}
                           {colIdx < COLUMNS.length - 1 && (
@@ -347,7 +378,7 @@ export function KanbanBoard({
                               className="p-1 rounded text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
                               title="Move right"
                             >
-                              <ChevronRight className="w-3 h-3" />
+                              <ChevronRight className="w-3.5 h-3.5" />
                             </button>
                           )}
                           <button
@@ -355,7 +386,7 @@ export function KanbanBoard({
                             className="p-1 rounded text-neutral-400 hover:text-rose-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
                             title="Delete card"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -378,7 +409,7 @@ export function KanbanBoard({
               {!isInputActive && (
                 <button
                   onClick={() => setActiveInputColumn(col.id)}
-                  className="mt-2 w-full py-1.5 px-2 rounded-xl text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60 flex items-center justify-center gap-1 transition"
+                  className="mt-2 w-full py-2 px-2 rounded-xl text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60 flex items-center justify-center gap-1 transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add card</span>

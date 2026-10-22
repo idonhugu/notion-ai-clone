@@ -28,7 +28,7 @@ export function TrashModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="relative w-full max-w-lg bg-white dark:bg-[#202020] rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
@@ -77,7 +77,7 @@ export function TrashModal({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => onRestore(doc.id)}
                     title="Restore document"

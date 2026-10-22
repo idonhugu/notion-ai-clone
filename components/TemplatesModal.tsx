@@ -330,7 +330,7 @@ export function TemplatesModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl h-[600px] max-h-[90vh] bg-white dark:bg-[#202020] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col md:flex-row overflow-hidden">
         {/* Left templates list */}
-        <div className="w-full md:w-72 border-r border-neutral-200 dark:border-neutral-800 flex flex-col bg-[#fbfbfa] dark:bg-[#191919]">
+        <div className="w-full md:w-72 max-h-48 md:max-h-none border-b md:border-b-0 md:border-r border-neutral-200 dark:border-neutral-800 flex flex-col bg-[#fbfbfa] dark:bg-[#191919]">
           <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <LayoutTemplate className="w-4 h-4 text-purple-600" />
