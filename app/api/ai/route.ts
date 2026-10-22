@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
     const { action, prompt, context, selectedText, tone } = await req.json();
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
     if (!apiKey) {
       return NextResponse.json(
         {
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const google = createGoogleGenerativeAI({ apiKey });
 
     let systemInstruction = `You are Notion AI, an expert, thoughtful, and highly capable writing assistant embedded inside a block-based document editor.
 Always format your output in clean, crisp Markdown (using #, ##, ### for headings, bullet points -, numbered lists 1., checkboxes - [ ], blockquotes >, and code fences \`\`\` when appropriate).
@@ -71,7 +74,7 @@ ${context ? `Context from the current document:\n${context}` : ''}`;
     }
 
     const result = streamText({
-      model: google('gemini-1.5-flash'),
+      model: google('gemini-3.5-flash'),
       system: systemInstruction,
       prompt: userPrompt,
       temperature: 0.7,
