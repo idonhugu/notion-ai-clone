@@ -1,0 +1,16 @@
+{
+  "name": "Notion AI",
+  "short_name": "Notion AI",
+  "description": "Block-based workspace with Google Gemini 1.5 Flash AI and Supabase",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
