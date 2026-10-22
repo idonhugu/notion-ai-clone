@@ -15,13 +15,14 @@ interface WorkspaceLayoutProps {
 const DEFAULT_STARTER_DOC: Document = {
   id: 'welcome-page',
   user_id: 'default-user',
-  title: '🚀 Welcome to Notion AI',
+  title: 'Welcome to Notion AI',
   icon: '🚀',
   cover_image:
     'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1600&auto=format&fit=crop&q=80',
   parent_id: null,
   is_favorite: true,
   is_archived: false,
+  attachments: [],
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   content: [
@@ -37,7 +38,7 @@ const DEFAULT_STARTER_DOC: Document = {
       content: [
         {
           type: 'text',
-          text: 'This is a complete Notion clone powered by Next.js, Supabase, BlockNote, and Google Gemini 1.5 Flash. Here is what you can do:',
+          text: 'This is a complete Notion workspace powered by Next.js, BlockNote, and Google Gemini AI. Everything saves automatically in real time.',
         },
       ],
     },
@@ -45,13 +46,13 @@ const DEFAULT_STARTER_DOC: Document = {
       id: 'b-3',
       type: 'checkListItem',
       props: { checked: true },
-      content: [{ type: 'text', text: 'Free-tier zero-cost architecture' }],
+      content: [{ type: 'text', text: 'Fast block-based editing with slash commands (/)' }],
     },
     {
       id: 'b-4',
       type: 'checkListItem',
       props: { checked: false },
-      content: [{ type: 'text', text: 'Press Space on an empty line to trigger Ask Notion AI' }],
+      content: [{ type: 'text', text: 'Press Space on an empty block to trigger Ask Notion AI' }],
     },
     {
       id: 'b-5',
@@ -63,13 +64,13 @@ const DEFAULT_STARTER_DOC: Document = {
       id: 'b-6',
       type: 'checkListItem',
       props: { checked: false },
-      content: [{ type: 'text', text: 'Create nested pages in the sidebar hierarchy' }],
+      content: [{ type: 'text', text: 'Upload files and documents using the attachment bar below' }],
     },
     {
       id: 'b-7',
       type: 'heading',
       props: { level: 2 },
-      content: [{ type: 'text', text: 'Gemini 1.5 Flash Superpowers' }],
+      content: [{ type: 'text', text: 'Google Gemini AI Capabilities' }],
     },
     {
       id: 'b-8',
@@ -77,7 +78,7 @@ const DEFAULT_STARTER_DOC: Document = {
       content: [
         {
           type: 'text',
-          text: 'Fast streaming responses directly into formatted native blocks',
+          text: 'Real-time streaming responses rendered directly into native editor blocks',
         },
       ],
     },
@@ -120,7 +121,7 @@ export function WorkspaceLayout({
   const supabase = createClient();
   const router = useRouter();
 
-  // Load documents
+  // Load user info & documents
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('notion_user');
@@ -142,7 +143,7 @@ export function WorkspaceLayout({
           } = await supabase.auth.getUser();
 
           if (user) {
-            setUserEmail(user.email || null);
+            setUserEmail(user.email || 'Laksha');
           }
 
           const { data, error } = await supabase
@@ -157,7 +158,7 @@ export function WorkspaceLayout({
             if (user) {
               const starterWithUser = {
                 ...DEFAULT_STARTER_DOC,
-                id: undefined, // allow uuid generation
+                id: undefined,
                 user_id: user.id,
               };
               const { data: seeded } = await supabase
@@ -180,9 +181,14 @@ export function WorkspaceLayout({
           const localDocsStr = localStorage.getItem('notion_ai_docs');
           if (localDocsStr) {
             try {
-              const parsed = JSON.parse(localDocsStr);
+              const parsed: Document[] = JSON.parse(localDocsStr);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                setDocuments(parsed);
+                // Sanitize duplicate rockets from old versions
+                const sanitized = parsed.map((d) => ({
+                  ...d,
+                  title: d.title ? d.title.replace(/^🚀\s*/, '') : 'Untitled',
+                }));
+                setDocuments(sanitized);
               } else {
                 setDocuments([DEFAULT_STARTER_DOC]);
               }
@@ -216,8 +222,44 @@ export function WorkspaceLayout({
     });
   };
 
-  // Handle document deletions
-  const handleDocumentDeleted = async (id: string) => {
+  // Handle document archiving to trash
+  const handleDocumentArchived = async (id: string) => {
+    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (hasSupabaseUrl) {
+      await supabase.from('documents').update({ is_archived: true }).eq('id', id);
+    }
+
+    setDocuments((prev) => {
+      const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: true } : d));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (activeDocId === id) {
+      router.push('/');
+    }
+  };
+
+  // Handle restoring from trash
+  const handleRestoreDocument = async (id: string) => {
+    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (hasSupabaseUrl) {
+      await supabase.from('documents').update({ is_archived: false }).eq('id', id);
+    }
+
+    setDocuments((prev) => {
+      const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: false } : d));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
+  // Handle permanent deletion
+  const handlePermanentDelete = async (id: string) => {
     const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (hasSupabaseUrl) {
       await supabase.from('documents').delete().eq('id', id);
@@ -230,10 +272,6 @@ export function WorkspaceLayout({
       }
       return updated;
     });
-
-    if (activeDocId === id) {
-      router.push('/');
-    }
   };
 
   // Handle favorite toggle
@@ -253,16 +291,21 @@ export function WorkspaceLayout({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white dark:bg-[#191919]">
+    <div className="flex h-screen overflow-hidden bg-white dark:bg-[#191919] transition-colors">
       <Sidebar
         documents={documents}
         onDocumentCreated={handleDocumentCreated}
-        onDocumentDeleted={handleDocumentDeleted}
+        onDocumentDeleted={handleDocumentArchived}
+        onRestoreDocument={handleRestoreDocument}
+        onPermanentDeleteDocument={handlePermanentDelete}
         onToggleFavorite={handleToggleFavorite}
         userEmail={userEmail}
       />
-      <main className="flex-1 overflow-y-auto relative">{children}</main>
+      <main className="flex-1 overflow-y-auto relative bg-white dark:bg-[#191919]">
+        {children}
+      </main>
     </div>
   );
 }
+
 export { DEFAULT_STARTER_DOC };

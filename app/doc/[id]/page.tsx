@@ -12,7 +12,7 @@ import Link from 'next/link';
 const Editor = dynamic(() => import('@/components/Editor'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-screen items-center justify-center">
+    <div className="flex h-screen items-center justify-center bg-white dark:bg-[#191919]">
       <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
     </div>
   ),
@@ -24,6 +24,7 @@ function DocumentContent() {
   const router = useRouter();
 
   const [document, setDocument] = useState<Document | null>(null);
+  const [parentDocument, setParentDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const supabase = createClient();
@@ -44,14 +45,26 @@ function DocumentContent() {
             .single();
 
           if (error || !data) {
-            // Check if starter doc
             if (id === DEFAULT_STARTER_DOC.id) {
               setDocument(DEFAULT_STARTER_DOC);
             } else {
               setNotFound(true);
             }
           } else {
-            setDocument(data);
+            const cleanDoc = {
+              ...data,
+              title: data.title ? data.title.replace(/^🚀\s*/, '') : 'Untitled',
+            };
+            setDocument(cleanDoc);
+
+            if (data.parent_id) {
+              const { data: parentData } = await supabase
+                .from('documents')
+                .select('*')
+                .eq('id', data.parent_id)
+                .single();
+              if (parentData) setParentDocument(parentData);
+            }
           }
         } else {
           // Check local storage fallback
@@ -60,7 +73,15 @@ function DocumentContent() {
             const parsed: Document[] = JSON.parse(localDocs);
             const found = parsed.find((d) => d.id === id);
             if (found) {
-              setDocument(found);
+              const cleanDoc = {
+                ...found,
+                title: found.title ? found.title.replace(/^🚀\s*/, '') : 'Untitled',
+              };
+              setDocument(cleanDoc);
+              if (cleanDoc.parent_id) {
+                const parent = parsed.find((d) => d.id === cleanDoc.parent_id);
+                if (parent) setParentDocument(parent);
+              }
             } else if (id === DEFAULT_STARTER_DOC.id) {
               setDocument(DEFAULT_STARTER_DOC);
             } else {
@@ -119,6 +140,7 @@ function DocumentContent() {
       <Editor
         key={document.id}
         document={document}
+        parentDocument={parentDocument}
         onDelete={(delId) => {
           router.push('/');
         }}

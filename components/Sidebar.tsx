@@ -16,16 +16,21 @@ import {
   X,
   LogOut,
   FolderPlus,
-  Settings,
+  LayoutTemplate,
+  Archive,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { SearchModal } from './SearchModal';
+import { TemplatesModal, Template } from './TemplatesModal';
+import { TrashModal } from './TrashModal';
 
 interface SidebarProps {
   documents: Document[];
   onDocumentCreated?: (doc: Document) => void;
   onDocumentDeleted?: (id: string) => void;
+  onRestoreDocument?: (id: string) => void;
+  onPermanentDeleteDocument?: (id: string) => void;
   onToggleFavorite?: (id: string, isFav: boolean) => void;
   userEmail?: string | null;
 }
@@ -34,6 +39,8 @@ export function Sidebar({
   documents,
   onDocumentCreated,
   onDocumentDeleted,
+  onRestoreDocument,
+  onPermanentDeleteDocument,
   onToggleFavorite,
   userEmail,
 }: SidebarProps) {
@@ -41,6 +48,8 @@ export function Sidebar({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -84,19 +93,21 @@ export function Sidebar({
     return roots;
   };
 
-  const tree = buildTree(documents.filter((d) => !d.is_archived));
-  const favorites = documents.filter((d) => d.is_favorite && !d.is_archived);
+  const activeDocuments = documents.filter((d) => !d.is_archived);
+  const archivedDocuments = documents.filter((d) => d.is_archived);
+  const tree = buildTree(activeDocuments);
+  const favorites = activeDocuments.filter((d) => d.is_favorite);
 
   // Create a new document in Supabase
-  const handleCreateDocument = async (parentId?: string | null) => {
+  const handleCreateDocument = async (parentId?: string | null, initialData?: { title: string; icon?: string; content?: any[] }) => {
     try {
       const newDocPayload = {
-        title: 'Untitled',
-        content: [],
+        title: initialData?.title || 'Untitled',
+        content: initialData?.content || [],
         parent_id: parentId || null,
         is_favorite: false,
         is_archived: false,
-        icon: '📄',
+        icon: initialData?.icon || '📄',
         cover_image: null,
       };
 
@@ -113,7 +124,7 @@ export function Sidebar({
           .from('documents')
           .insert({
             ...newDocPayload,
-            user_id: user?.id || 'demo-user',
+            user_id: user?.id || 'admin-user',
           })
           .select()
           .single();
@@ -123,10 +134,9 @@ export function Sidebar({
         }
         createdDoc = data;
       } else {
-        // Local state fallback
         createdDoc = {
           id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          user_id: 'local-user',
+          user_id: 'admin-user',
           ...newDocPayload,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -145,16 +155,15 @@ export function Sidebar({
       setIsMobileOpen(false);
     } catch (err) {
       console.error('Create page error:', err);
-      // Fallback local create
       const fallbackDoc: Document = {
         id: `doc_${Date.now()}`,
-        user_id: 'local-user',
-        title: 'Untitled',
-        content: [],
+        user_id: 'admin-user',
+        title: initialData?.title || 'Untitled',
+        content: initialData?.content || [],
         parent_id: parentId || null,
         is_favorite: false,
         is_archived: false,
-        icon: '📄',
+        icon: initialData?.icon || '📄',
         cover_image: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -162,6 +171,14 @@ export function Sidebar({
       if (onDocumentCreated) onDocumentCreated(fallbackDoc);
       router.push(`/doc/${fallbackDoc.id}`);
     }
+  };
+
+  const handleApplyTemplate = (tmpl: Template) => {
+    handleCreateDocument(null, {
+      title: tmpl.title,
+      icon: tmpl.icon,
+      content: tmpl.blocks,
+    });
   };
 
   const handleSignOut = async () => {
@@ -245,7 +262,7 @@ export function Sidebar({
               />
             </button>
 
-            {/* Delete button */}
+            {/* Archive / Delete button */}
             {onDocumentDeleted && (
               <button
                 onClick={(e) => {
@@ -253,7 +270,7 @@ export function Sidebar({
                   e.stopPropagation();
                   onDocumentDeleted(node.id);
                 }}
-                title="Delete page"
+                title="Archive to trash"
                 className="p-1 rounded text-neutral-400 hover:text-red-500 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 <Trash2 className="w-3 h-3" />
@@ -271,7 +288,7 @@ export function Sidebar({
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-[#fbfbfa] dark:bg-[#1f1f1f] border-r border-neutral-200/80 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 select-none">
+    <div className="flex flex-col h-full bg-[#fbfbfa] dark:bg-[#1a1a1a] border-r border-neutral-200/80 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 select-none transition-colors">
       {/* Top Workspace Header */}
       <div className="flex items-center justify-between p-3.5 border-b border-neutral-200/60 dark:border-neutral-800">
         <Link href="/" className="flex items-center gap-2">
@@ -307,6 +324,15 @@ export function Sidebar({
           <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-500">
             ⌘K
           </kbd>
+        </button>
+
+        {/* Templates button */}
+        <button
+          onClick={() => setIsTemplatesOpen(true)}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition"
+        >
+          <LayoutTemplate className="w-3.5 h-3.5 text-purple-600" />
+          <span>Templates</span>
         </button>
 
         {/* New Page button */}
@@ -365,12 +391,30 @@ export function Sidebar({
 
           {tree.length === 0 ? (
             <div className="px-2 py-4 text-center text-xs text-neutral-400">
-              No pages yet. Click &ldquo;New Page&rdquo; to start.
+              No pages yet. Click &ldquo;New Page&rdquo; or &ldquo;Templates&rdquo; to start.
             </div>
           ) : (
             tree.map((node) => renderTreeItem(node, 0))
           )}
         </div>
+      </div>
+
+      {/* Trash button */}
+      <div className="px-2 pb-2">
+        <button
+          onClick={() => setIsTrashOpen(true)}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-neutral-500 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition"
+        >
+          <div className="flex items-center gap-2">
+            <Trash2 className="w-3.5 h-3.5 text-neutral-400" />
+            <span>Trash</span>
+          </div>
+          {archivedDocuments.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-500">
+              {archivedDocuments.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Footer User Info & Sign Out */}
@@ -397,7 +441,23 @@ export function Sidebar({
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        documents={documents}
+        documents={activeDocuments}
+      />
+
+      {/* Templates Modal */}
+      <TemplatesModal
+        isOpen={isTemplatesOpen}
+        onClose={() => setIsTemplatesOpen(false)}
+        onApplyTemplate={handleApplyTemplate}
+      />
+
+      {/* Trash Modal */}
+      <TrashModal
+        isOpen={isTrashOpen}
+        onClose={() => setIsTrashOpen(false)}
+        archivedDocuments={archivedDocuments}
+        onRestore={onRestoreDocument || (() => {})}
+        onPermanentDelete={onPermanentDeleteDocument || (() => {})}
       />
     </div>
   );

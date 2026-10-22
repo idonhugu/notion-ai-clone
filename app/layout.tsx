@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import '@blocknote/mantine/style.css';
 import '@blocknote/core/fonts/inter.css';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
   title: 'Notion AI - Connected Workspace & AI Assistant',
   description:
-    'A full-featured Notion clone powered by Next.js, Google Gemini 1.5 Flash, Supabase PostgreSQL, and BlockNote.',
+    'A full-featured Notion clone powered by Next.js, Google Gemini, Supabase PostgreSQL, and BlockNote.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -35,13 +36,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className="min-h-full flex flex-col bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 font-sans selection:bg-purple-200 selection:text-purple-900">
-        {children}
+      <body className="min-h-full flex flex-col bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 font-sans selection:bg-purple-200 selection:text-purple-900 transition-colors duration-150">
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 const Editor = dynamic(() => import('@/components/Editor'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-screen items-center justify-center">
+    <div className="flex h-screen items-center justify-center bg-white dark:bg-[#191919]">
       <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
     </div>
   ),
@@ -34,7 +34,11 @@ export default function HomePage() {
             .limit(1);
 
           if (!error && data && data.length > 0) {
-            setCurrentDoc(data[0]);
+            const doc = data[0];
+            setCurrentDoc({
+              ...doc,
+              title: doc.title ? doc.title.replace(/^🚀\s*/, '') : 'Untitled',
+            });
           } else {
             setCurrentDoc(DEFAULT_STARTER_DOC);
           }
@@ -44,7 +48,11 @@ export default function HomePage() {
             try {
               const parsed = JSON.parse(localDocsStr);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                setCurrentDoc(parsed[0]);
+                const doc = parsed[0];
+                setCurrentDoc({
+                  ...doc,
+                  title: doc.title ? doc.title.replace(/^🚀\s*/, '') : 'Untitled',
+                });
               } else {
                 setCurrentDoc(DEFAULT_STARTER_DOC);
               }

@@ -8,35 +8,33 @@ import { CoverImage } from './CoverImage';
 import { IconPicker } from './IconPicker';
 import { AIInlineMenu } from './AIInlineMenu';
 import { AIFloatingMenu } from './AIFloatingMenu';
-import {
-  Sparkles,
-  CloudCheck,
-  Loader2,
-  Share2,
-  Trash2,
-  Star,
-  Download,
-  AlertCircle,
-  FileText,
-} from 'lucide-react';
-import { Document } from '@/lib/types';
+import { TopNav } from './TopNav';
+import { DocumentAttachments } from './DocumentAttachments';
+import { useTheme } from './ThemeProvider';
+import { Document, AttachedFile } from '@/lib/types';
 
 interface EditorProps {
   document: Document;
+  parentDocument?: Document | null;
   onDelete?: (id: string) => void;
   onUpdateDocument?: (doc: Partial<Document>) => void;
 }
 
 export default function Editor({
   document: initialDoc,
+  parentDocument,
   onDelete,
   onUpdateDocument,
 }: EditorProps) {
+  const { theme } = useTheme();
   const [doc, setDoc] = useState<Document>(initialDoc);
   const [title, setTitle] = useState(initialDoc.title || 'Untitled');
   const [icon, setIcon] = useState<string | null>(initialDoc.icon);
   const [coverImage, setCoverImage] = useState<string | null>(initialDoc.cover_image);
   const [isFavorite, setIsFavorite] = useState<boolean>(initialDoc.is_favorite);
+  const [attachments, setAttachments] = useState<AttachedFile[]>(initialDoc.attachments || []);
+  const [isFullWidth, setIsFullWidth] = useState(false);
+  const [wordCount, setWordCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'local'>('saved');
 
   // AI Popover states
@@ -56,9 +54,33 @@ export default function Editor({
         : undefined,
   });
 
+  // Calculate live word count
+  const calculateWordCount = useCallback(() => {
+    if (!editor) return;
+    try {
+      let count = 0;
+      editor.forEachBlock((block) => {
+        if (Array.isArray(block.content)) {
+          block.content.forEach((item: any) => {
+            if (item.text) {
+              const words = item.text.trim().split(/\s+/).filter(Boolean);
+              count += words.length;
+            }
+          });
+        }
+        return true;
+      });
+      setWordCount(count);
+    } catch {
+      // ignore parsing error
+    }
+  }, [editor]);
+
   // Track selection changes for the floating action menu
   useEffect(() => {
     if (!editor) return;
+
+    calculateWordCount();
 
     const handleSelectionChange = () => {
       try {
@@ -76,7 +98,6 @@ export default function Editor({
             });
           }
         } else {
-          // If no selection, hide floating menu
           setSelectedText('');
           setFloatingMenuPos(null);
         }
@@ -87,7 +108,7 @@ export default function Editor({
 
     const unsubscribe = editor.onSelectionChange(handleSelectionChange);
     return () => unsubscribe();
-  }, [editor]);
+  }, [editor, calculateWordCount]);
 
   // Save handler with debounce (1000ms)
   const saveDocument = useCallback(
@@ -97,6 +118,7 @@ export default function Editor({
       icon?: string | null;
       cover_image?: string | null;
       is_favorite?: boolean;
+      attachments?: AttachedFile[];
     }) => {
       setSaveStatus('saving');
 
@@ -114,10 +136,11 @@ export default function Editor({
               updatedFields.cover_image !== undefined ? updatedFields.cover_image : coverImage,
             is_favorite:
               updatedFields.is_favorite !== undefined ? updatedFields.is_favorite : isFavorite,
+            attachments:
+              updatedFields.attachments !== undefined ? updatedFields.attachments : attachments,
             updated_at: new Date().toISOString(),
           };
 
-          // Optimistically update parent state
           if (onUpdateDocument) {
             onUpdateDocument(payload);
           }
@@ -131,13 +154,12 @@ export default function Editor({
               .eq('id', doc.id);
 
             if (error) {
-              console.warn('Supabase save warning (fallback to local):', error.message);
               setSaveStatus('local');
             } else {
               setSaveStatus('saved');
             }
           } else {
-            // Local fallback mode
+            // Local storage fallback
             if (typeof window !== 'undefined') {
               localStorage.setItem(`doc_${doc.id}`, JSON.stringify(payload));
             }
@@ -149,12 +171,13 @@ export default function Editor({
         }
       }, 1000);
     },
-    [doc.id, title, icon, coverImage, isFavorite, editor, supabase, onUpdateDocument]
+    [doc.id, title, icon, coverImage, isFavorite, attachments, editor, supabase, onUpdateDocument]
   );
 
   // Trigger save on editor content change
   const handleEditorChange = () => {
     if (!editor) return;
+    calculateWordCount();
     saveDocument({ content: editor.document });
   };
 
@@ -162,7 +185,6 @@ export default function Editor({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!editor) return;
 
-    // Detect Space on an empty block
     if (e.key === ' ') {
       try {
         const cursor = editor.getTextCursorPosition();
@@ -195,6 +217,7 @@ export default function Editor({
         } else {
           editor.insertBlocks(parsedBlocks, editor.document[editor.document.length - 1], 'after');
         }
+        calculateWordCount();
         saveDocument({ content: editor.document });
       }
     } catch (err) {
@@ -210,6 +233,7 @@ export default function Editor({
       const cursor = editor.getTextCursorPosition();
       if (cursor?.block && parsed.length > 0) {
         editor.replaceBlocks([cursor.block], parsed);
+        calculateWordCount();
         saveDocument({ content: editor.document });
       }
     } catch (err) {
@@ -235,86 +259,25 @@ export default function Editor({
   };
 
   return (
-    <div className="relative min-h-screen bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 flex flex-col pb-40">
-      {/* Top action header bar */}
-      <div className="sticky top-0 z-30 flex items-center justify-between px-6 py-2.5 bg-white/80 dark:bg-[#191919]/80 backdrop-blur-md border-b border-neutral-100 dark:border-neutral-800">
-        <div className="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
-          <span className="font-medium truncate max-w-[150px] md:max-w-xs">{title || 'Untitled'}</span>
-          <div className="h-3 w-[1px] bg-neutral-300 dark:bg-neutral-700" />
-          
-          {/* Save Status Indicator */}
-          <div className="flex items-center gap-1.5">
-            {saveStatus === 'saving' && (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
-                <span className="text-purple-600 dark:text-purple-400">Saving...</span>
-              </>
-            )}
-            {saveStatus === 'saved' && (
-              <>
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Saved</span>
-              </>
-            )}
-            {saveStatus === 'local' && (
-              <span className="text-neutral-400">Saved locally</span>
-            )}
-            {saveStatus === 'error' && (
-              <>
-                <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                <span className="text-amber-500">Unsaved changes</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Action icons */}
-        <div className="flex items-center gap-1.5">
-          {/* Ask AI trigger button */}
-          <button
-            onClick={() => setShowInlineAI(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 transition shadow-sm"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>Ask AI</span>
-          </button>
-
-          {/* Favorite Toggle */}
-          <button
-            onClick={() => {
-              const updated = !isFavorite;
-              setIsFavorite(updated);
-              saveDocument({ is_favorite: updated });
-            }}
-            className={`p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition ${
-              isFavorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-400 hover:text-neutral-600'
-            }`}
-            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Star className={`w-4 h-4 ${isFavorite ? 'fill-amber-400' : ''}`} />
-          </button>
-
-          {/* Export Markdown */}
-          <button
-            onClick={handleExportMarkdown}
-            className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
-            title="Export as Markdown"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-
-          {/* Delete Page */}
-          {onDelete && (
-            <button
-              onClick={() => onDelete(doc.id)}
-              className="p-1.5 rounded-md text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-              title="Delete Document"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="relative min-h-screen bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 flex flex-col pb-40 transition-colors">
+      {/* Top Navigation Bar with Breadcrumbs & Notion Controls */}
+      <TopNav
+        document={{ ...doc, title, icon, is_favorite: isFavorite }}
+        parentDocument={parentDocument}
+        isFullWidth={isFullWidth}
+        onToggleFullWidth={() => setIsFullWidth(!isFullWidth)}
+        isFavorite={isFavorite}
+        onToggleFavorite={() => {
+          const updated = !isFavorite;
+          setIsFavorite(updated);
+          saveDocument({ is_favorite: updated });
+        }}
+        saveStatus={saveStatus}
+        onOpenAI={() => setShowInlineAI(true)}
+        onDelete={onDelete ? () => onDelete(doc.id) : undefined}
+        wordCount={wordCount}
+        onExportMarkdown={handleExportMarkdown}
+      />
 
       {/* Cover Image banner */}
       <CoverImage
@@ -325,9 +288,14 @@ export default function Editor({
         }}
       />
 
-      {/* Main document canvas */}
-      <div className="w-full max-w-4xl mx-auto px-6 md:px-16 pt-8" onKeyDown={handleKeyDown}>
-        {/* Page Icon Picker */}
+      {/* Main Document Canvas */}
+      <div
+        className={`w-full mx-auto transition-all duration-200 ${
+          isFullWidth ? 'max-w-full px-8 md:px-20' : 'max-w-4xl px-6 md:px-16'
+        } pt-6`}
+        onKeyDown={handleKeyDown}
+      >
+        {/* Page Icon Picker (Clean single emoji) */}
         <IconPicker
           icon={icon}
           onUpdate={(newIcon) => {
@@ -367,15 +335,24 @@ export default function Editor({
           />
         )}
 
-        {/* Core BlockNote Editor Canvas */}
-        <div className="min-h-[500px]">
+        {/* Core BlockNote Editor Canvas with Dynamic Theme Matching */}
+        <div className="min-h-[450px]">
           <BlockNoteView
             editor={editor}
             onChange={handleEditorChange}
-            theme="light"
+            theme={theme === 'dark' ? 'dark' : 'light'}
             className="notion-editor-styles"
           />
         </div>
+
+        {/* Document Attachments & Uploads */}
+        <DocumentAttachments
+          files={attachments}
+          onUpdateFiles={(newFiles) => {
+            setAttachments(newFiles);
+            saveDocument({ attachments: newFiles });
+          }}
+        />
       </div>
 
       {/* Floating Selection Menu for highlighted text */}
