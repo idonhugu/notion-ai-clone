@@ -143,9 +143,9 @@ function cleanExtractedText(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  // Cap at 45,000 characters for high-density AI context
-  if (cleaned.length > 45000) {
-    return cleaned.slice(0, 45000) + '\n\n[... Document truncated for AI context ...]';
+  // Cap at 35,000 characters for optimal AI context and low latency
+  if (cleaned.length > 35000) {
+    return cleaned.slice(0, 35000) + '\n\n[... Document truncated for AI context ...]';
   }
   return cleaned;
 }

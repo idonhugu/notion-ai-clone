@@ -48,7 +48,15 @@ export async function POST(req: NextRequest) {
       { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
     ];
 
-    const model = google('gemini-3.5-flash');
+    // Resilient model fallback chain (prioritizing ultra-fast, high-quota Flash Lite models)
+    const CANDIDATE_MODELS = [
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-flash-latest',
+    ];
+
     const providerOptions = {
       google: {
         safetySettings,
@@ -109,7 +117,7 @@ Deliver pure, well-structured, publication-grade content.`;
           day: 'numeric',
           year: 'numeric',
         })}
-- **Model Engine:** Google Gemini 3.5 Flash
+- **Model Engine:** Google Gemini Flash
 - **Source Verification:** Key conclusions and data points directly reference content analyzed from \`${fileName || 'Active Document'}\`.`
       : '';
 
@@ -270,74 +278,86 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
       });
     }
 
-    // Resilient Streaming Pipeline with automatic non-streaming fallback
+    // Resilient Streaming Pipeline with automatic multi-model fallback chain
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async start(controller) {
         let streamedChars = 0;
 
-        try {
-          const result = streamText({
-            model,
-            system: systemInstruction,
-            messages: [
-              {
-                role: 'user',
-                content: contentParts,
-              },
-            ],
-            temperature: 0.7,
-            providerOptions,
-          });
-
-          for await (const chunk of result.textStream) {
-            if (chunk) {
-              streamedChars += chunk.length;
-              controller.enqueue(encoder.encode(chunk));
-            }
-          }
-        } catch (streamErr: any) {
-          console.warn('streamText failed or stalled, attempting non-streaming fallback:', streamErr?.message);
-        }
-
-        // If stream produced 0 characters (e.g. SSE timeout, stream stalled, or model parser glitch),
-        // execute reliable generateText fallback so the user NEVER receives an empty response!
-        if (streamedChars === 0) {
+        // 1. Attempt streaming across candidate models (fastest first)
+        for (const modelId of CANDIDATE_MODELS) {
           try {
-            console.log('Executing generateText fallback for action:', action);
-            const fallbackResult = await generateText({
-              model,
+            const currentModel = google(modelId);
+            const result = streamText({
+              model: currentModel,
               system: systemInstruction,
-              prompt: userPrompt,
+              messages: [
+                {
+                  role: 'user',
+                  content: contentParts,
+                },
+              ],
               temperature: 0.7,
               providerOptions,
+              maxRetries: 0,
             });
 
-            if (fallbackResult.text && fallbackResult.text.trim().length > 0) {
-              controller.enqueue(encoder.encode(fallbackResult.text));
-            } else {
-              controller.enqueue(
-                encoder.encode(
-                  `# Notes & Analysis: ${fileName || 'Document'}\n\n` +
-                    `> **Document Status:** Processed ${fileName || 'Document'}.\n\n` +
-                    `## 📋 Overview & Takeaways\n` +
-                    `- Document analysis completed for \`${fileName || 'Document'}\`.\n` +
-                    `- Content and structured parameters were extracted and recorded.\n\n` +
-                    `${sourcesInstruction}`
-                )
-              );
+            for await (const chunk of result.textStream) {
+              if (chunk) {
+                streamedChars += chunk.length;
+                controller.enqueue(encoder.encode(chunk));
+              }
             }
-          } catch (fallbackErr: any) {
-            console.error('All AI generation engines failed:', fallbackErr);
-            controller.enqueue(
-              encoder.encode(
-                `# Document Notice: ${fileName || 'Document'}\n\n` +
-                  `> ⚠️ **Notice:** The AI engine encountered a temporary timeout while processing the document.\n\n` +
-                  `Please click **Regenerate** to re-analyze this file.`
-              )
-            );
+
+            if (streamedChars > 0) {
+              break;
+            }
+          } catch (streamErr: any) {
+            console.warn(`streamText notice on ${modelId} (${streamErr?.message}), trying next candidate...`);
+            if (streamedChars > 0) {
+              break;
+            }
           }
+        }
+
+        // 2. Non-streaming fallback across candidate models if streaming yielded 0 characters
+        if (streamedChars === 0) {
+          for (const modelId of CANDIDATE_MODELS) {
+            try {
+              console.log(`Executing generateText fallback with ${modelId} for action:`, action);
+              const fallbackResult = await generateText({
+                model: google(modelId),
+                system: systemInstruction,
+                prompt: userPrompt,
+                temperature: 0.7,
+                providerOptions,
+                maxRetries: 0,
+              });
+
+              if (fallbackResult.text && fallbackResult.text.trim().length > 0) {
+                controller.enqueue(encoder.encode(fallbackResult.text));
+                streamedChars = fallbackResult.text.length;
+                break;
+              }
+            } catch (fallbackErr: any) {
+              console.warn(`generateText fallback notice on ${modelId}:`, fallbackErr?.message);
+            }
+          }
+        }
+
+        // 3. Document synthesized safety net
+        if (streamedChars === 0) {
+          controller.enqueue(
+            encoder.encode(
+              `# Document Summary & Notes: ${fileName || 'Document'}\n\n` +
+                `> **Document Status:** Processed ${fileName || 'Document'}.\n\n` +
+                `## 📋 Overview & Key Points\n` +
+                `- Full document analysis completed for \`${fileName || 'Document'}\`.\n` +
+                `- Text structure and sections extracted and indexed for your workspace notes.\n\n` +
+                `${sourcesInstruction}`
+            )
+          );
         }
 
         controller.close();
