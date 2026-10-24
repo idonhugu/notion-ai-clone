@@ -133,7 +133,7 @@ export function AIChatSidecar({
           fileData: activeDoc ? activeDoc.url : undefined,
           fileName: activeDoc ? activeDoc.name : undefined,
           fileType: activeDoc ? activeDoc.type : undefined,
-          attachedDocs: activeDoc ? [activeDoc] : visibleAttachments,
+          attachedDocs: activeDoc ? undefined : visibleAttachments,
           includeSources,
         }),
       });

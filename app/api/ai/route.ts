@@ -93,6 +93,11 @@ export async function POST(req: NextRequest) {
     if (Array.isArray(attachedDocs) && attachedDocs.length > 0) {
       for (const doc of attachedDocs.slice(0, 3)) {
         if (doc.url && doc.id !== '__kanban__') {
+          // If this document is identical to primary fileData, reuse extractedDocText rather than parsing twice
+          if (fileData && doc.url === fileData && extractedDocText) {
+            attachedTextSnippets.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${extractedDocText}`);
+            continue;
+          }
           const t = await extractTextFromDataUrl(doc.url, doc.name, doc.type);
           attachedTextSnippets.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${t}`);
         }
@@ -350,16 +355,24 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
 
         // 3. Document synthesized safety net
         if (streamedChars === 0) {
-          controller.enqueue(
-            encoder.encode(
-              `# Document Summary & Notes: ${fileName || 'Document'}\n\n` +
-                `> **Document Status:** Processed ${fileName || 'Document'}.\n\n` +
-                `## 📋 Overview & Key Points\n` +
-                `- Full document analysis completed for \`${fileName || 'Document'}\`.\n` +
-                `- Text structure and sections extracted and indexed for your workspace notes.\n\n` +
-                `${citationsBlock}`
-            )
-          );
+          if (action === 'chat') {
+            controller.enqueue(
+              encoder.encode(
+                `I apologize, but I was unable to complete your request. Please try sending your question again.`
+              )
+            );
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                `# Document Summary & Notes: ${fileName || 'Document'}\n\n` +
+                  `> **Document Status:** Processed ${fileName || 'Document'}.\n\n` +
+                  `## 📋 Overview & Key Points\n` +
+                  `- Full document analysis completed for \`${fileName || 'Document'}\`.\n` +
+                  `- Text structure and sections extracted and indexed for your workspace notes.\n\n` +
+                  `${citationsBlock}`
+              )
+            );
+          }
         }
 
         controller.close();
