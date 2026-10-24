@@ -3,6 +3,7 @@ import { streamText, generateText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromDataUrl } from '@/lib/documentParser';
 
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
@@ -291,6 +292,7 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
     const stream = new ReadableStream({
       async start(controller) {
         let streamedChars = 0;
+        const executionErrors: string[] = [];
 
         // 1. Attempt streaming across candidate models (fastest first)
         for (const modelId of CANDIDATE_MODELS) {
@@ -319,9 +321,13 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
 
             if (streamedChars > 0) {
               break;
+            } else {
+              executionErrors.push(`${modelId} (stream returned 0 chars)`);
             }
           } catch (streamErr: any) {
-            console.warn(`streamText notice on ${modelId} (${streamErr?.message}), trying next candidate...`);
+            const msg = streamErr?.message || String(streamErr);
+            console.warn(`streamText notice on ${modelId}:`, msg);
+            executionErrors.push(`${modelId} (stream error): ${msg}`);
             if (streamedChars > 0) {
               break;
             }
@@ -348,31 +354,24 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
                 break;
               }
             } catch (fallbackErr: any) {
-              console.warn(`generateText fallback notice on ${modelId}:`, fallbackErr?.message);
+              const msg = fallbackErr?.message || String(fallbackErr);
+              console.warn(`generateText fallback notice on ${modelId}:`, msg);
+              executionErrors.push(`${modelId} (generate error): ${msg}`);
             }
           }
         }
 
-        // 3. Document synthesized safety net
+        // 3. Transparent diagnostic notice if all models failed to generate text
         if (streamedChars === 0) {
-          if (action === 'chat') {
-            controller.enqueue(
-              encoder.encode(
-                `I apologize, but I was unable to complete your request. Please try sending your question again.`
-              )
-            );
-          } else {
-            controller.enqueue(
-              encoder.encode(
-                `# Document Summary & Notes: ${fileName || 'Document'}\n\n` +
-                  `> **Document Status:** Processed ${fileName || 'Document'}.\n\n` +
-                  `## 📋 Overview & Key Points\n` +
-                  `- Full document analysis completed for \`${fileName || 'Document'}\`.\n` +
-                  `- Text structure and sections extracted and indexed for your workspace notes.\n\n` +
-                  `${citationsBlock}`
-              )
-            );
-          }
+          controller.enqueue(
+            encoder.encode(
+              `> ⚠️ **AI Notice:** Unable to generate response for \`${fileName || 'this request'}\`.\n\n` +
+                (executionErrors.length > 0
+                  ? `**Diagnostic Details:**\n${executionErrors.map((e) => `- ${e}`).join('\n')}\n\n`
+                  : '') +
+                `Please click **Regenerate** to re-analyze.`
+            )
+          );
         }
 
         controller.close();
@@ -382,7 +381,9 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
       },
     });
   } catch (error: any) {

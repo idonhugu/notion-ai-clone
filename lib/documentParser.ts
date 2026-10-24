@@ -50,13 +50,12 @@ export async function extractTextFromDataUrl(
 
       // 2. Secondary Engine: Decompressed Flate & raw text stream extractor
       const streamText = extractTextFromPdfBuffer(buffer);
-      if (streamText && streamText.trim().length > 15) {
+      if (streamText && isValidDocumentText(streamText)) {
         return cleanExtractedText(streamText);
       }
 
-      return `[PDF Document: ${fileName || 'Document'} (${Math.round(
-        buffer.length / 1024
-      )} KB) - Form/Vector Structure]`;
+      // If text cannot be parsed into human-readable words, return empty so multimodal PDF buffer is passed
+      return '';
     }
 
     // Text / Markdown / CSV / JSON / Code
@@ -64,8 +63,15 @@ export async function extractTextFromDataUrl(
     return cleanExtractedText(text);
   } catch (error: any) {
     console.warn(`Text extraction notice for ${fileName}:`, error.message);
-    return `[Document: ${fileName || 'Attachment'}]`;
+    return '';
   }
+}
+
+function isValidDocumentText(text: string): boolean {
+  if (!text || text.trim().length < 30) return false;
+  // Must contain at least 10 readable words with 3+ alphabetic characters
+  const words = text.match(/[a-zA-Z]{3,}/g);
+  return words !== null && words.length >= 10;
 }
 
 function extractTextFromPdfBuffer(buffer: Buffer): string {
