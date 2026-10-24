@@ -47,13 +47,17 @@ export function SearchModal({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredDocs.length));
+      if (filteredDocs.length > 0) {
+        setSelectedIndex((prev) => (prev + 1) % filteredDocs.length);
+      }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + filteredDocs.length) % Math.max(1, filteredDocs.length));
+      if (filteredDocs.length > 0) {
+        setSelectedIndex((prev) => (prev - 1 + filteredDocs.length) % filteredDocs.length);
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (filteredDocs[selectedIndex]) {
+      if (filteredDocs.length > 0 && filteredDocs[selectedIndex]) {
         handleSelect(filteredDocs[selectedIndex]);
       }
     } else if (e.key === 'Escape') {

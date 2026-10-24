@@ -61,8 +61,46 @@ export function WorkspaceLayout({
 
     loadDocs();
 
+    // Real-time synchronization listeners for document events
+    const handleDocUpdated = (e: Event) => {
+      const { detail } = e as CustomEvent<Partial<Document> & { id: string }>;
+      if (detail && detail.id) {
+        setDocuments((prev) =>
+          prev.map((d) => (d.id === detail.id ? { ...d, ...detail } : d))
+        );
+      }
+    };
+
+    const handleDocCreated = (e: Event) => {
+      const { detail } = e as CustomEvent<Document>;
+      if (detail && detail.id) {
+        setDocuments((prev) => {
+          if (prev.some((d) => d.id === detail.id)) return prev;
+          return [...prev, detail];
+        });
+      }
+    };
+
+    const handleDocDeleted = (e: Event) => {
+      const { detail } = e as CustomEvent<{ id: string; permanent?: boolean }>;
+      if (detail && detail.id) {
+        setDocuments((prev) =>
+          detail.permanent
+            ? prev.filter((d) => d.id !== detail.id)
+            : prev.map((d) => (d.id === detail.id ? { ...d, is_archived: true } : d))
+        );
+      }
+    };
+
+    window.addEventListener('notion:doc_updated', handleDocUpdated);
+    window.addEventListener('notion:doc_created', handleDocCreated);
+    window.addEventListener('notion:doc_deleted', handleDocDeleted);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('notion:doc_updated', handleDocUpdated);
+      window.removeEventListener('notion:doc_created', handleDocCreated);
+      window.removeEventListener('notion:doc_deleted', handleDocDeleted);
     };
   }, []);
 

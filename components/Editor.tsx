@@ -272,9 +272,39 @@ export default function Editor({
     }
   };
 
-  // Keyboard navigation and spacebar trigger
+  // Global keyboard shortcuts (Cmd+J for AI sidecar, Cmd+/ for shortcuts cheat sheet)
+  useEffect(() => {
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setIsSidecarOpen((prev) => !prev);
+      }
+
+      if (isCmdOrCtrl && e.key === '/') {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, []);
+
+  // Keyboard navigation and spacebar trigger inside editor
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!editor) return;
+
+    // Never intercept typing in standard inputs, textareas, or outside editor canvas
+    const target = e.target as HTMLElement;
+    if (
+      target?.tagName === 'INPUT' ||
+      target?.tagName === 'TEXTAREA' ||
+      !target?.closest?.('.bn-editor')
+    ) {
+      return;
+    }
 
     if (e.key === ' ') {
       try {
@@ -332,16 +362,20 @@ export default function Editor({
     }
   };
 
-  // Export current document as clean Markdown file
+  // Export current document as clean Markdown file (supporting full unicode & safe filenames)
   const handleExportMarkdown = async () => {
     if (!editor) return;
     try {
       const markdown = await editor.blocksToMarkdownLossy(editor.document);
+      const safeTitle = (title || 'untitled')
+        .trim()
+        .replace(/[\/\\?%*:|"<>]/g, '-')
+        .replace(/\s+/g, ' ');
       const blob = new Blob([`# ${title}\n\n${markdown}`], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${title.toLowerCase().replace(/\s+/g, '-') || 'document'}.md`;
+      a.download = `${safeTitle || 'document'}.md`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -389,7 +423,6 @@ export default function Editor({
           className={`flex-1 min-w-0 mx-auto transition-all duration-200 ${
             isFullWidth ? 'max-w-full px-4 sm:px-8 md:px-14' : 'max-w-4xl px-3.5 sm:px-6 md:px-12'
           } pt-5 pb-32`}
-          onKeyDown={handleKeyDown}
         >
           {/* Page Icon Picker (Clean single emoji) */}
           <IconPicker
@@ -400,16 +433,29 @@ export default function Editor({
             }}
           />
 
-          {/* Title Input */}
+          {/* Title Input (Full Unicode & Space Key Support) */}
           <input
             ref={titleInputRef}
             type="text"
             value={title}
             onChange={(e) => {
-              setTitle(e.target.value);
-              saveDocument({ title: e.target.value });
+              const newTitle = e.target.value;
+              setTitle(newTitle);
+              if (onUpdateDocument) {
+                onUpdateDocument({ title: newTitle });
+              }
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('notion:doc_updated', {
+                    detail: { id: doc.id, title: newTitle },
+                  })
+                );
+              }
+              saveDocument({ title: newTitle });
             }}
             onKeyDown={(e) => {
+              // Crucial: Stop propagation so Space key and unicode inputs are never blocked by outside listeners
+              e.stopPropagation();
               if (e.key === 'Enter') {
                 e.preventDefault();
                 editor?.focus();
@@ -471,7 +517,7 @@ export default function Editor({
               )}
 
               {/* Core BlockNote Editor Canvas with Dynamic Theme Matching */}
-              <div className="min-h-[420px]">
+              <div className="min-h-[420px]" onKeyDown={handleKeyDown}>
                 <BlockNoteView
                   editor={editor}
                   onChange={handleEditorChange}

@@ -155,6 +155,20 @@ export async function createDocument(
       if (doc?.id) {
         if (typeof window !== 'undefined') {
           localStorage.setItem(`doc_${doc.id}`, JSON.stringify(doc));
+
+          const cachedList = localStorage.getItem('notion_ai_docs');
+          if (cachedList) {
+            try {
+              const list: Document[] = JSON.parse(cachedList);
+              if (!list.some((d) => d.id === doc.id)) {
+                localStorage.setItem('notion_ai_docs', JSON.stringify([...list, doc]));
+              }
+            } catch {}
+          }
+
+          window.dispatchEvent(
+            new CustomEvent('notion:doc_created', { detail: doc })
+          );
         }
         return doc;
       }
@@ -182,6 +196,18 @@ export async function createDocument(
 
   if (typeof window !== 'undefined') {
     localStorage.setItem(`doc_${localId}`, JSON.stringify(fallback));
+
+    const cachedList = localStorage.getItem('notion_ai_docs');
+    if (cachedList) {
+      try {
+        const list: Document[] = JSON.parse(cachedList);
+        localStorage.setItem('notion_ai_docs', JSON.stringify([...list, fallback]));
+      } catch {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('notion:doc_created', { detail: fallback })
+    );
   }
 
   return fallback;
@@ -202,6 +228,24 @@ export async function updateDocument(
       const updated = await res.json();
       if (typeof window !== 'undefined') {
         localStorage.setItem(`doc_${id}`, JSON.stringify(updated));
+
+        const cachedList = localStorage.getItem('notion_ai_docs');
+        if (cachedList) {
+          try {
+            const list: Document[] = JSON.parse(cachedList);
+            const idx = list.findIndex((d) => d.id === id);
+            if (idx !== -1) {
+              list[idx] = { ...list[idx], ...updated };
+              localStorage.setItem('notion_ai_docs', JSON.stringify(list));
+            }
+          } catch {}
+        }
+
+        window.dispatchEvent(
+          new CustomEvent('notion:doc_updated', {
+            detail: { id, ...updated },
+          })
+        );
       }
       return updated;
     }
@@ -216,6 +260,24 @@ export async function updateDocument(
       try {
         const doc = { ...JSON.parse(cached), ...payload, updated_at: new Date().toISOString() };
         localStorage.setItem(`doc_${id}`, JSON.stringify(doc));
+
+        const cachedList = localStorage.getItem('notion_ai_docs');
+        if (cachedList) {
+          try {
+            const list: Document[] = JSON.parse(cachedList);
+            const idx = list.findIndex((d) => d.id === id);
+            if (idx !== -1) {
+              list[idx] = { ...list[idx], ...doc };
+              localStorage.setItem('notion_ai_docs', JSON.stringify(list));
+            }
+          } catch {}
+        }
+
+        window.dispatchEvent(
+          new CustomEvent('notion:doc_updated', {
+            detail: { id, ...doc },
+          })
+        );
         return doc;
       } catch {}
     }
@@ -232,7 +294,27 @@ export async function deleteDocument(
     const res = await fetch(`/api/documents/${id}?permanent=${permanent}`, {
       method: 'DELETE',
     });
-    return res.ok;
+    const ok = res.ok;
+    if (ok && typeof window !== 'undefined') {
+      if (permanent) {
+        localStorage.removeItem(`doc_${id}`);
+      }
+      const cachedList = localStorage.getItem('notion_ai_docs');
+      if (cachedList) {
+        try {
+          const list: Document[] = JSON.parse(cachedList);
+          const updatedList = permanent
+            ? list.filter((d) => d.id !== id)
+            : list.map((d) => (d.id === id ? { ...d, is_archived: true } : d));
+          localStorage.setItem('notion_ai_docs', JSON.stringify(updatedList));
+        } catch {}
+      }
+
+      window.dispatchEvent(
+        new CustomEvent('notion:doc_deleted', { detail: { id, permanent } })
+      );
+    }
+    return ok;
   } catch (err) {
     console.error(`Failed to delete doc ${id}:`, err);
     return false;
