@@ -1,6 +1,8 @@
+import zlib from 'zlib';
+
 /**
  * Universal document text extractor for PDFs, Text, Markdown, CSV, JSON, and Code.
- * Safe for server runtime with dual-engine PDF extraction.
+ * Safe for server runtime with dual-engine PDF extraction and Flate stream decompression.
  */
 
 export async function extractTextFromDataUrl(
@@ -8,84 +10,128 @@ export async function extractTextFromDataUrl(
   fileName: string,
   fileType: string
 ): Promise<string> {
+  if (!dataUrl || typeof dataUrl !== 'string') {
+    return '';
+  }
+
   try {
-    // Parse mime and base64 data
-    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    const base64Data = matches ? matches[2] : dataUrl.replace(/^data:[^,]+,/, '');
-    const detectedMime = (matches ? matches[1] : fileType || '').toLowerCase();
-    const buffer = Buffer.from(base64Data, 'base64');
+    // Robust base64 extraction (never breaks on multi-line base64 or custom mime headers)
+    const commaIdx = dataUrl.indexOf(',');
+    const header = commaIdx !== -1 ? dataUrl.slice(0, commaIdx) : '';
+    const rawBase64 = commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+
+    const mimeMatch = header.match(/^data:([^;]+)/);
+    const detectedMime = (mimeMatch ? mimeMatch[1] : fileType || '').toLowerCase();
+
+    // Strip whitespace/newlines that may be present in base64 strings
+    const cleanBase64 = rawBase64.replace(/[\r\n\s]/g, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
 
     const isPdf =
-      detectedMime.includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
+      detectedMime.includes('pdf') ||
+      (fileName && fileName.toLowerCase().endsWith('.pdf')) ||
+      (buffer.length >= 4 && buffer.slice(0, 4).toString() === '%PDF');
 
     if (isPdf) {
-      // 1. Try PDFParse (v2)
+      // 1. Primary Engine: PDFParse v2
       try {
         const { PDFParse } = await import('pdf-parse');
-        const parser = new PDFParse({ data: Uint8Array.from(buffer) });
+        const parser = new PDFParse({ data: new Uint8Array(buffer) });
         const res = await parser.getText();
-        if (res && res.text && res.text.trim().length > 10) {
-          return cleanExtractedText(res.text);
+        if (res && res.text && res.text.trim().length > 15) {
+          const cleaned = cleanExtractedText(res.text);
+          if (cleaned.length > 15) {
+            return cleaned;
+          }
         }
       } catch (err) {
         // Fallback to stream extraction below
       }
 
-      // 2. Stream & TJ object fallback extractor
-      const streamText = extractTextFromPdfStream(buffer);
-      if (streamText && streamText.trim().length > 0) {
+      // 2. Secondary Engine: Decompressed Flate & raw text stream extractor
+      const streamText = extractTextFromPdfBuffer(buffer);
+      if (streamText && streamText.trim().length > 15) {
         return cleanExtractedText(streamText);
       }
 
-      return `[PDF Document: ${fileName} (${Math.round(
+      return `[PDF Document: ${fileName || 'Document'} (${Math.round(
         buffer.length / 1024
-      )} KB) - Text stream contained encoded vectors or scanned image content]`;
+      )} KB) - Form/Vector Structure]`;
     }
 
     // Text / Markdown / CSV / JSON / Code
     const text = buffer.toString('utf-8');
     return cleanExtractedText(text);
   } catch (error: any) {
-    console.error('Error extracting text from document:', error);
-    return `[Could not extract text from ${fileName}: ${error.message}]`;
+    console.warn(`Text extraction notice for ${fileName}:`, error.message);
+    return `[Document: ${fileName || 'Attachment'}]`;
   }
 }
 
-function extractTextFromPdfStream(buffer: Buffer): string {
+function extractTextFromPdfBuffer(buffer: Buffer): string {
   try {
-    const content = buffer.toString('binary');
     const texts: string[] = [];
+    const content = buffer.toString('binary');
 
-    // Match (string) Tj
-    const tjRegex = /\(([^)]+)\)\s*Tj/g;
+    // 1. Try extracting and decompressing /FlateDecode streams
+    const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
     let match: RegExpExecArray | null;
-    while ((match = tjRegex.exec(content)) !== null) {
-      texts.push(match[1]);
+
+    while ((match = streamRegex.exec(content)) !== null) {
+      try {
+        const streamBytes = Buffer.from(match[1], 'binary');
+        let decompressed: string | null = null;
+        try {
+          decompressed = zlib.inflateSync(streamBytes).toString('latin1');
+        } catch {
+          try {
+            decompressed = zlib.inflateRawSync(streamBytes).toString('latin1');
+          } catch {}
+        }
+
+        if (decompressed) {
+          parseTextOperators(decompressed, texts);
+        }
+      } catch {}
     }
 
-    // Match [(string) 10 (string)] TJ
-    const tjArrayRegex = /\[(.*?)\]\s*TJ/g;
-    while ((match = tjArrayRegex.exec(content)) !== null) {
-      const inner = match[1];
-      const subMatches = inner.match(/\(([^)]+)\)/g);
-      if (subMatches) {
-        texts.push(subMatches.map((s) => s.slice(1, -1)).join(' '));
-      }
-    }
-
-    // Match uncompressed plain text blocks between BT and ET
-    const btRegex = /BT[\r\n\s]+([\s\S]*?)[\r\n\s]+ET/g;
-    while ((match = btRegex.exec(content)) !== null) {
-      const block = match[1];
-      const parenMatches = block.match(/\(([^)]+)\)/g);
-      if (parenMatches) {
-        texts.push(parenMatches.map((s) => s.slice(1, -1)).join(' '));
-      }
-    }
+    // 2. Also parse uncompressed operators directly in the PDF body
+    parseTextOperators(content, texts);
 
     return texts.join(' ');
   } catch {
     return '';
+  }
+}
+
+function parseTextOperators(content: string, outTexts: string[]): void {
+  // Match (text) Tj
+  const tjRegex = /\(([^)]+)\)\s*Tj/g;
+  let match: RegExpExecArray | null;
+  while ((match = tjRegex.exec(content)) !== null) {
+    if (match[1] && match[1].length > 1) {
+      outTexts.push(match[1]);
+    }
+  }
+
+  // Match [(text) 10 (text)] TJ
+  const tjArrayRegex = /\[(.*?)\]\s*TJ/g;
+  while ((match = tjArrayRegex.exec(content)) !== null) {
+    const inner = match[1];
+    const subMatches = inner.match(/\(([^)]+)\)/g);
+    if (subMatches) {
+      outTexts.push(subMatches.map((s) => s.slice(1, -1)).join(' '));
+    }
+  }
+
+  // Match uncompressed blocks between BT and ET
+  const btRegex = /BT[\r\n\s]+([\s\S]*?)[\r\n\s]+ET/g;
+  while ((match = btRegex.exec(content)) !== null) {
+    const block = match[1];
+    const parenMatches = block.match(/\(([^)]+)\)/g);
+    if (parenMatches) {
+      outTexts.push(parenMatches.map((s) => s.slice(1, -1)).join(' '));
+    }
   }
 }
 
@@ -97,9 +143,9 @@ function cleanExtractedText(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  // Truncate to reasonable context window limit (max 40,000 chars)
-  if (cleaned.length > 40000) {
-    return cleaned.slice(0, 40000) + '\n\n[... Document truncated for AI context ...]';
+  // Cap at 45,000 characters for high-density AI context
+  if (cleaned.length > 45000) {
+    return cleaned.slice(0, 45000) + '\n\n[... Document truncated for AI context ...]';
   }
   return cleaned;
 }

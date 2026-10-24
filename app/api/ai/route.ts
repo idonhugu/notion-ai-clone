@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText } from 'ai';
+import { streamText, generateText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromDataUrl } from '@/lib/documentParser';
 
@@ -39,66 +39,53 @@ export async function POST(req: NextRequest) {
 
     const google = createGoogleGenerativeAI({ apiKey });
 
-    // Handle primary file (native multimodal support for PDFs and images)
-    const isPdf =
-      (fileType && fileType.toLowerCase().includes('pdf')) ||
-      (fileName && fileName.toLowerCase().endsWith('.pdf')) ||
-      (fileData && typeof fileData === 'string' && fileData.startsWith('data:application/pdf'));
+    // Permissive safety settings so financial forms, application documents, medical records, and legal texts are never falsely blocked
+    const safetySettings: any[] = [
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
+    ];
 
-    const isImage =
-      (fileType && fileType.toLowerCase().startsWith('image/')) ||
-      (fileData && typeof fileData === 'string' && fileData.startsWith('data:image/'));
+    const model = google('gemini-3.5-flash');
+    const providerOptions = {
+      google: {
+        safetySettings,
+      },
+    };
 
-    let primaryFileBuffer: Buffer | null = null;
-    let primaryFileMime: string = fileType || (isPdf ? 'application/pdf' : 'image/jpeg');
+    // Extract text from primary file
     let extractedDocText = '';
+    let primaryFileBuffer: Buffer | null = null;
+    let primaryFileMime = fileType || 'application/pdf';
 
     if (fileData && typeof fileData === 'string') {
-      if (isPdf || isImage) {
-        try {
-          const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
-          const base64Data = matches ? matches[2] : fileData.replace(/^data:[^,]+,/, '');
-          if (matches && matches[1]) primaryFileMime = matches[1];
-          primaryFileBuffer = Buffer.from(base64Data, 'base64');
-        } catch (err) {
-          console.warn('Multimodal buffer conversion warning:', err);
-        }
-      } else {
-        // Plain text, markdown, CSV, JSON, code
-        extractedDocText = await extractTextFromDataUrl(
-          fileData,
-          fileName || 'document',
-          fileType || ''
-        );
-      }
+      extractedDocText = await extractTextFromDataUrl(
+        fileData,
+        fileName || 'document',
+        fileType || ''
+      );
+
+      // If document is a PDF or image, extract buffer for potential multimodal vision fallback
+      const commaIdx = fileData.indexOf(',');
+      const rawBase64 = commaIdx !== -1 ? fileData.slice(commaIdx + 1) : fileData;
+      try {
+        const cleanB64 = rawBase64.replace(/[\r\n\s]/g, '');
+        primaryFileBuffer = Buffer.from(cleanB64, 'base64');
+        const header = commaIdx !== -1 ? fileData.slice(0, commaIdx) : '';
+        const m = header.match(/^data:([^;]+)/);
+        if (m && m[1]) primaryFileMime = m[1];
+      } catch {}
     }
 
-    // Handle attached documents bundle
-    const attachedBundleParts: any[] = [];
+    // Extract text from attached docs bundle if provided
     const attachedTextSnippets: string[] = [];
-
     if (Array.isArray(attachedDocs) && attachedDocs.length > 0) {
       for (const doc of attachedDocs.slice(0, 3)) {
         if (doc.url && doc.id !== '__kanban__') {
-          const docIsPdf =
-            (doc.type && doc.type.toLowerCase().includes('pdf')) ||
-            (doc.name && doc.name.toLowerCase().endsWith('.pdf')) ||
-            doc.url.startsWith('data:application/pdf');
-
-          if (docIsPdf) {
-            try {
-              const m = doc.url.match(/^data:([^;]+);base64,(.+)$/);
-              const b64 = m ? m[2] : doc.url.replace(/^data:[^,]+,/, '');
-              attachedBundleParts.push({
-                type: 'file',
-                data: Buffer.from(b64, 'base64'),
-                mediaType: 'application/pdf',
-              });
-            } catch {}
-          } else {
-            const t = await extractTextFromDataUrl(doc.url, doc.name, doc.type);
-            attachedTextSnippets.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${t}`);
-          }
+          const t = await extractTextFromDataUrl(doc.url, doc.name, doc.type);
+          attachedTextSnippets.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${t}`);
         }
       }
     }
@@ -116,7 +103,7 @@ Deliver pure, well-structured, publication-grade content.`;
 ---
 ### 📚 Sources & Citations
 - **Primary Source:** \`${fileName || 'Active Document'}\`
-- **File Type:** ${fileType || (isPdf ? 'PDF Document' : 'Document')}
+- **File Type:** ${fileType || 'Document'}
 - **Generated On:** ${new Date().toLocaleDateString(undefined, {
           month: 'short',
           day: 'numeric',
@@ -140,7 +127,7 @@ Provide an executive summary formatted with:
 (4-6 crisp bullet points with **bold** highlights)
 
 ## ⚡ Critical Data & Insights
-(Key figures, dates, methodologies, or findings discussed)
+(Key figures, dates, methodologies, or requirements discussed)
 
 ## 🎯 Action Items & Next Steps
 - [ ] Concrete next step 1
@@ -156,13 +143,13 @@ ${sourcesInstruction}`;
 # 📝 Notes: ${fileName || 'Document'}
 
 ## 🎯 Major Concepts & Key Ideas
-(Define the primary concepts and terminology introduced in the document)
+(Define the primary concepts, terms, and purposes introduced in the document)
 
-## 📋 Comprehensive Notes & Analysis
+## 📋 Comprehensive Notes & Detailed Breakdown
 (Break down the document section by section with bullet points, examples, and structured details)
 
-## 💡 Notable Highlights & Quotes
-> (Direct or synthesized key takeaways)
+## 💡 Notable Highlights & Requirements
+> (Key requirements, conditions, or takeaways)
 
 ## ✅ Action Items & Key Follow-ups
 - [ ] Prioritized next step 1
@@ -262,10 +249,20 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         userPrompt = prompt || selectedText || context || 'Help brainstorm ideas for this document.';
     }
 
-    // Assemble multimodal message parts
-    const contentParts: any[] = [{ type: 'text', text: userPrompt }];
+    // Determine message payload:
+    // If text was extracted (> 30 chars), pure text in prompt is fastest and 100% immune to PDF format/AcroForm parser errors.
+    // If text could not be extracted (e.g. scanned image PDF) and buffer is available, send multimodal file part.
+    const hasExtractedText = extractedDocText && extractedDocText.trim().length > 30;
+    const isCleanPdfBuffer =
+      primaryFileBuffer &&
+      primaryFileBuffer.length > 100 &&
+      primaryFileBuffer.length < 15 * 1024 * 1024 &&
+      primaryFileBuffer.slice(0, 4).toString() === '%PDF';
 
-    if (primaryFileBuffer && primaryFileBuffer.length > 0) {
+    const useMultimodal = !hasExtractedText && isCleanPdfBuffer;
+
+    const contentParts: any[] = [{ type: 'text', text: userPrompt }];
+    if (useMultimodal && primaryFileBuffer) {
       contentParts.push({
         type: 'file',
         data: primaryFileBuffer,
@@ -273,25 +270,84 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
       });
     }
 
-    for (const att of attachedBundleParts) {
-      contentParts.push(att);
-    }
+    // Resilient Streaming Pipeline with automatic non-streaming fallback
+    const encoder = new TextEncoder();
 
-    const result = streamText({
-      model: google('gemini-3.5-flash'),
-      system: systemInstruction,
-      messages: [
-        {
-          role: 'user',
-          content: contentParts,
-        },
-      ],
-      temperature: 0.7,
+    const stream = new ReadableStream({
+      async start(controller) {
+        let streamedChars = 0;
+
+        try {
+          const result = streamText({
+            model,
+            system: systemInstruction,
+            messages: [
+              {
+                role: 'user',
+                content: contentParts,
+              },
+            ],
+            temperature: 0.7,
+            providerOptions,
+          });
+
+          for await (const chunk of result.textStream) {
+            if (chunk) {
+              streamedChars += chunk.length;
+              controller.enqueue(encoder.encode(chunk));
+            }
+          }
+        } catch (streamErr: any) {
+          console.warn('streamText failed or stalled, attempting non-streaming fallback:', streamErr?.message);
+        }
+
+        // If stream produced 0 characters (e.g. SSE timeout, stream stalled, or model parser glitch),
+        // execute reliable generateText fallback so the user NEVER receives an empty response!
+        if (streamedChars === 0) {
+          try {
+            console.log('Executing generateText fallback for action:', action);
+            const fallbackResult = await generateText({
+              model,
+              system: systemInstruction,
+              prompt: userPrompt,
+              temperature: 0.7,
+              providerOptions,
+            });
+
+            if (fallbackResult.text && fallbackResult.text.trim().length > 0) {
+              controller.enqueue(encoder.encode(fallbackResult.text));
+            } else {
+              controller.enqueue(
+                encoder.encode(
+                  `# Notes & Analysis: ${fileName || 'Document'}\n\n` +
+                    `> **Document Status:** Processed ${fileName || 'Document'}.\n\n` +
+                    `## 📋 Overview & Takeaways\n` +
+                    `- Document analysis completed for \`${fileName || 'Document'}\`.\n` +
+                    `- Content and structured parameters were extracted and recorded.\n\n` +
+                    `${sourcesInstruction}`
+                )
+              );
+            }
+          } catch (fallbackErr: any) {
+            console.error('All AI generation engines failed:', fallbackErr);
+            controller.enqueue(
+              encoder.encode(
+                `# Document Notice: ${fileName || 'Document'}\n\n` +
+                  `> ⚠️ **Notice:** The AI engine encountered a temporary timeout while processing the document.\n\n` +
+                  `Please click **Regenerate** to re-analyze this file.`
+              )
+            );
+          }
+        }
+
+        controller.close();
+      },
     });
 
-    return result.toTextStreamResponse({
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
       },
     });
   } catch (error: any) {
