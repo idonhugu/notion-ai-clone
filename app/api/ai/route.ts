@@ -3,6 +3,8 @@ import { streamText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromDataUrl } from '@/lib/documentParser';
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const {
@@ -37,28 +39,71 @@ export async function POST(req: NextRequest) {
 
     const google = createGoogleGenerativeAI({ apiKey });
 
-    // Extract text from primary file if provided
+    // Handle primary file (native multimodal support for PDFs and images)
+    const isPdf =
+      (fileType && fileType.toLowerCase().includes('pdf')) ||
+      (fileName && fileName.toLowerCase().endsWith('.pdf')) ||
+      (fileData && typeof fileData === 'string' && fileData.startsWith('data:application/pdf'));
+
+    const isImage =
+      (fileType && fileType.toLowerCase().startsWith('image/')) ||
+      (fileData && typeof fileData === 'string' && fileData.startsWith('data:image/'));
+
+    let primaryFileBuffer: Buffer | null = null;
+    let primaryFileMime: string = fileType || (isPdf ? 'application/pdf' : 'image/jpeg');
     let extractedDocText = '';
-    if (fileData) {
-      extractedDocText = await extractTextFromDataUrl(
-        fileData,
-        fileName || 'document',
-        fileType || ''
-      );
+
+    if (fileData && typeof fileData === 'string') {
+      if (isPdf || isImage) {
+        try {
+          const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
+          const base64Data = matches ? matches[2] : fileData.replace(/^data:[^,]+,/, '');
+          if (matches && matches[1]) primaryFileMime = matches[1];
+          primaryFileBuffer = Buffer.from(base64Data, 'base64');
+        } catch (err) {
+          console.warn('Multimodal buffer conversion warning:', err);
+        }
+      } else {
+        // Plain text, markdown, CSV, JSON, code
+        extractedDocText = await extractTextFromDataUrl(
+          fileData,
+          fileName || 'document',
+          fileType || ''
+        );
+      }
     }
 
-    // Extract text from attached docs bundle if provided
-    let attachedBundleText = '';
+    // Handle attached documents bundle
+    const attachedBundleParts: any[] = [];
+    const attachedTextSnippets: string[] = [];
+
     if (Array.isArray(attachedDocs) && attachedDocs.length > 0) {
-      const texts: string[] = [];
       for (const doc of attachedDocs.slice(0, 3)) {
         if (doc.url && doc.id !== '__kanban__') {
-          const t = await extractTextFromDataUrl(doc.url, doc.name, doc.type);
-          texts.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${t}`);
+          const docIsPdf =
+            (doc.type && doc.type.toLowerCase().includes('pdf')) ||
+            (doc.name && doc.name.toLowerCase().endsWith('.pdf')) ||
+            doc.url.startsWith('data:application/pdf');
+
+          if (docIsPdf) {
+            try {
+              const m = doc.url.match(/^data:([^;]+);base64,(.+)$/);
+              const b64 = m ? m[2] : doc.url.replace(/^data:[^,]+,/, '');
+              attachedBundleParts.push({
+                type: 'file',
+                data: Buffer.from(b64, 'base64'),
+                mediaType: 'application/pdf',
+              });
+            } catch {}
+          } else {
+            const t = await extractTextFromDataUrl(doc.url, doc.name, doc.type);
+            attachedTextSnippets.push(`--- Attached File: ${doc.name} (${doc.type}) ---\n${t}`);
+          }
         }
       }
-      attachedBundleText = texts.join('\n\n');
     }
+
+    const attachedBundleText = attachedTextSnippets.join('\n\n');
 
     let systemInstruction = `You are Notion AI, an expert, thoughtful, and highly capable writing assistant embedded inside an enterprise block-based document editor.
 Always format your output in clean, crisp Markdown (using #, ##, ### for headings, bullet points -, numbered lists 1., checkboxes - [ ], blockquotes >, and code fences \`\`\` when appropriate).
@@ -71,14 +116,14 @@ Deliver pure, well-structured, publication-grade content.`;
 ---
 ### 📚 Sources & Citations
 - **Primary Source:** \`${fileName || 'Active Document'}\`
-- **File Type:** ${fileType || 'Document'}
+- **File Type:** ${fileType || (isPdf ? 'PDF Document' : 'Document')}
 - **Generated On:** ${new Date().toLocaleDateString(undefined, {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
         })}
 - **Model Engine:** Google Gemini 3.5 Flash
-- **Source Verification:** Key conclusions and data points directly reference content extracted from \`${fileName || 'Active Document'}\`.`
+- **Source Verification:** Key conclusions and data points directly reference content analyzed from \`${fileName || 'Active Document'}\`.`
       : '';
 
     let userPrompt = '';
@@ -101,10 +146,7 @@ Provide an executive summary formatted with:
 - [ ] Concrete next step 1
 - [ ] Concrete next step 2
 
-Document Content:
-"""
-${extractedDocText || context || 'No document content extracted.'}
-"""
+${extractedDocText ? `Document Content:\n"""\n${extractedDocText}\n"""\n` : ''}
 ${sourcesInstruction}`;
         break;
 
@@ -126,10 +168,7 @@ ${sourcesInstruction}`;
 - [ ] Prioritized next step 1
 - [ ] Prioritized next step 2
 
-Document Content:
-"""
-${extractedDocText || context || 'No document content extracted.'}
-"""
+${extractedDocText ? `Document Content:\n"""\n${extractedDocText}\n"""\n` : ''}
 ${sourcesInstruction}`;
         break;
 
@@ -212,7 +251,7 @@ Format responses in clean Markdown with bolding, lists, and quotes.`;
 ${context || 'No document text yet.'}
 """
 
-${attachedBundleText ? `Attached Files & Referenced PDFs:\n${attachedBundleText}\n` : ''}
+${attachedBundleText ? `Attached Files & Referenced Documents:\n${attachedBundleText}\n` : ''}
 
 User Question/Request:
 "${prompt}"
@@ -223,10 +262,30 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         userPrompt = prompt || selectedText || context || 'Help brainstorm ideas for this document.';
     }
 
+    // Assemble multimodal message parts
+    const contentParts: any[] = [{ type: 'text', text: userPrompt }];
+
+    if (primaryFileBuffer && primaryFileBuffer.length > 0) {
+      contentParts.push({
+        type: 'file',
+        data: primaryFileBuffer,
+        mediaType: primaryFileMime,
+      });
+    }
+
+    for (const att of attachedBundleParts) {
+      contentParts.push(att);
+    }
+
     const result = streamText({
       model: google('gemini-3.5-flash'),
       system: systemInstruction,
-      prompt: userPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: contentParts,
+        },
+      ],
       temperature: 0.7,
     });
 

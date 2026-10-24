@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   FileText,
@@ -13,6 +13,7 @@ import {
   BookOpen,
   FolderPlus,
   Quote,
+  AlertCircle,
 } from 'lucide-react';
 import { AttachedFile } from './DocumentAttachments';
 
@@ -46,14 +47,32 @@ export function DocumentAIModal({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Sync action when initialAction changes
+  useEffect(() => {
+    if (initialAction) {
+      setAction(initialAction);
+    }
+  }, [initialAction]);
+
   useEffect(() => {
     if (isOpen && file) {
       handleGenerate(action, includeSources);
     } else {
       setStreamedText('');
       setError(null);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
-  }, [isOpen, file]);
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [isOpen, file, action]);
 
   if (!isOpen || !file) return null;
 
@@ -61,6 +80,12 @@ export function DocumentAIModal({
     targetAction: 'doc_summarize' | 'doc_notes',
     citeFlag: boolean = includeSources
   ) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setIsLoading(true);
     setStreamedText('');
     setError(null);
@@ -69,6 +94,7 @@ export function DocumentAIModal({
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortController.signal,
         body: JSON.stringify({
           action: targetAction,
           fileData: file.url,
@@ -80,10 +106,10 @@ export function DocumentAIModal({
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to process document');
+        throw new Error(errorData.error || `Failed to process document (Status ${res.status})`);
       }
 
-      if (!res.body) throw new Error('No stream available');
+      if (!res.body) throw new Error('No stream available from AI engine');
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -96,7 +122,12 @@ export function DocumentAIModal({
         accumulated += chunk;
         setStreamedText(accumulated);
       }
+
+      if (!accumulated.trim()) {
+        throw new Error('The AI engine returned an empty response. Please try clicking Regenerate.');
+      }
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       console.error('Error generating document insights:', err);
       setError(err.message || 'Something went wrong while processing the document.');
     } finally {
@@ -169,8 +200,9 @@ export function DocumentAIModal({
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
-                setAction('doc_summarize');
-                handleGenerate('doc_summarize', includeSources);
+                if (action !== 'doc_summarize') {
+                  setAction('doc_summarize');
+                }
               }}
               disabled={isLoading}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
@@ -185,8 +217,9 @@ export function DocumentAIModal({
 
             <button
               onClick={() => {
-                setAction('doc_notes');
-                handleGenerate('doc_notes', includeSources);
+                if (action !== 'doc_notes') {
+                  setAction('doc_notes');
+                }
               }}
               disabled={isLoading}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
@@ -215,20 +248,39 @@ export function DocumentAIModal({
           </label>
         </div>
 
-        {/* Content Preview Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 font-sans">
+        {/* Content Preview Area with generous minimum height */}
+        <div className="flex-1 min-h-[340px] max-h-[65vh] overflow-y-auto p-4 sm:p-5 space-y-3 font-sans">
           {error && (
-            <div className="p-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900">
-              {error}
+            <div className="p-3.5 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="font-semibold mb-0.5">Analysis Notice</div>
+                <div>{error}</div>
+              </div>
             </div>
           )}
 
           {isLoading && !streamedText && (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-neutral-400 space-y-3">
-              <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+            <div className="flex flex-col items-center justify-center py-16 text-center text-neutral-400 space-y-3">
+              <Loader2 className="w-7 h-7 animate-spin text-purple-600" />
               <div className="text-xs">
-                Reading <span className="font-semibold text-neutral-700 dark:text-neutral-300">{file.name}</span> and synthesizing insights with Gemini...
+                Analyzing <span className="font-semibold text-neutral-700 dark:text-neutral-300">{file.name}</span> and synthesizing {action === 'doc_notes' ? 'comprehensive notes' : 'executive summary'} with Gemini...
               </div>
+            </div>
+          )}
+
+          {!isLoading && !streamedText && !error && (
+            <div className="flex flex-col items-center justify-center py-16 text-center text-neutral-400 space-y-3">
+              <BookOpen className="w-8 h-8 text-purple-500/60" />
+              <div className="text-xs text-neutral-500 max-w-sm">
+                Ready to extract insights from <span className="font-semibold text-neutral-700 dark:text-neutral-300">{file.name}</span>.
+              </div>
+              <button
+                onClick={() => handleGenerate(action, includeSources)}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition"
+              >
+                Generate {action === 'doc_notes' ? 'Notes' : 'Summary'}
+              </button>
             </div>
           )}
 
@@ -244,7 +296,7 @@ export function DocumentAIModal({
           <button
             onClick={() => handleGenerate(action, includeSources)}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition disabled:opacity-50"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Regenerate</span>
