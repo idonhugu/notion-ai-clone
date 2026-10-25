@@ -9,6 +9,7 @@ export type AIAction =
   | 'translate'
   | 'eli5'
   | 'table'
+  | 'checklist'
   | 'chat'
   | 'add_presentation'
   | 'fix_grammar'

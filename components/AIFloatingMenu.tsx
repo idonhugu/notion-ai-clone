@@ -19,6 +19,7 @@ import {
   Strikethrough,
   Code,
   Palette,
+  ListTodo,
 } from 'lucide-react';
 import { AIAction } from '@/lib/types';
 import { NOTION_COLORS } from '@/lib/notionStyles';
@@ -299,6 +300,15 @@ export function AIFloatingMenu({
           >
             <Wand2 className="w-3 h-3 text-purple-500" />
             <span>Fix Grammar</span>
+          </button>
+
+          <button
+            onClick={() => handleAction('checklist')}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 rounded-md font-medium transition"
+            title="Convert selected text or list into an interactive checklist"
+          >
+            <ListTodo className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+            <span>To Checklist</span>
           </button>
 
           <button

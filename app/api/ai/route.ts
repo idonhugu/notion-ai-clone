@@ -664,11 +664,31 @@ ${includeSources ? sourcesInstruction : ''}`;
         }\n"""`;
         break;
 
+      case 'checklist':
+        systemInstruction = `You are Laksha's WorkSpace AI Copilot, specialized in structural document editing.
+When converting content into a checklist:
+- Format each item with "- [ ] " using clean Markdown.
+- Output ONLY the markdown checklist directly, starting immediately with the first "- [ ] " item.
+- DO NOT output any introductory phrases like "Here is your checklist:" or "Sure, I have converted it".
+- DO NOT output any closing pleasantries or follow-up questions.
+- Preserve all items, order, spelling, and clinical/technical terminology.`;
+        userPrompt = `Convert the following text or list into an interactive Markdown checklist using "- [ ] " for each item:\n\n"""\n${
+          selectedText || context || prompt || ''
+        }\n"""`;
+        break;
+
       case 'chat':
         systemInstruction = `You are Laksha's WorkSpace AI Copilot, an intelligent workspace sidecar assistant. You have full visibility into the author's active document and any attached files (including PDFs, docs, spreadsheets).
 Use the provided document context and attached files to give insightful, accurate, and direct answers.
 When citing facts from attached documents, mention the document name.
-Format responses in clean Markdown with bolding, lists, and quotes.`;
+Format responses in clean Markdown with bolding, lists, and quotes.
+
+CRITICAL FORMATTING INSTRUCTIONS FOR CONVERSIONS & FORMAT TRANSFORMATIONS:
+If the user asks to convert, change, format, or turn content into a checklist, to-do list, bullet list, table, or outline:
+- Output ONLY the converted markdown content directly (e.g. starting immediately with "- [ ] " for checklists).
+- DO NOT add conversational preambles like "Here is your document converted into an interactive checklist:" or "Sure! Here is your...".
+- DO NOT add conversational sign-offs or follow-up questions like "Would you like me to tailor this..." or "Let me know if you need anything else".
+- Maintain exact item content, capitalization, and phrasing so it cleanly replaces or updates the document canvas.`;
         userPrompt = `Active Document Context:
 """
 ${context || 'No document text yet.'}

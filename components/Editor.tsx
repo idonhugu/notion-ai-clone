@@ -22,6 +22,7 @@ import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
 import { NotionFontStyle, NOTION_FONTS } from '@/lib/notionStyles';
+import { sanitizeAIMarkdown, isChecklistMarkdown } from '@/lib/sanitizeAIMarkdown';
 
 interface EditorProps {
   document: Document;
@@ -497,13 +498,19 @@ export default function Editor({
     }
   };
 
-  // Insert AI generated Markdown directly into blocks
-  const handleInsertAIMarkdown = async (markdown: string) => {
+  // Insert or Replace AI generated Markdown directly into blocks
+  const handleInsertAIMarkdown = async (
+    rawMarkdown: string,
+    options?: { mode?: 'auto' | 'replace' | 'insert' }
+  ) => {
     if (!editor) return;
     try {
+      const cleanMarkdown = sanitizeAIMarkdown(rawMarkdown);
+      if (!cleanMarkdown) return;
+
       // Check if markdown contains an active presentation link: [emoji] [Title](/doc/[id])
-      const match = markdown.match(/(?:([^\s\[\]]+)\s+)?\[([^\]]+)\]\((\/doc\/[a-f0-9\-]{36})\)/);
-      if (match) {
+      const match = cleanMarkdown.match(/(?:([^\s\[\]]+)\s+)?\[([^\]]+)\]\((\/doc\/[a-f0-9\-]{36})\)/);
+      if (match && !cleanMarkdown.includes('\n')) {
         const icon = match[1] || '🩺';
         const linkTitle = match[2];
         const href = match[3];
@@ -534,17 +541,124 @@ export default function Editor({
         return;
       }
 
-      const parsedBlocks = await editor.tryParseMarkdownToBlocks(markdown);
-      if (parsedBlocks && parsedBlocks.length > 0) {
+      const parsedBlocks = await editor.tryParseMarkdownToBlocks(cleanMarkdown);
+      if (!parsedBlocks || parsedBlocks.length === 0) return;
+
+      const mode = options?.mode || 'auto';
+      const incomingChecklists = parsedBlocks.filter((b: any) => b.type === 'checkListItem');
+      const isChecklistConversion = incomingChecklists.length > 0;
+
+      const extractBlockText = (b: any): string => {
+        if (!b) return '';
+        if (typeof b.content === 'string') return b.content.trim();
+        if (Array.isArray(b.content)) {
+          return b.content
+            .map((c: any) => (typeof c === 'string' ? c : c.text || ''))
+            .join('')
+            .trim();
+        }
+        return '';
+      };
+
+      const isConversationalBlock = (b: any) => {
+        const t = extractBlockText(b).toLowerCase();
+        return (
+          t.includes('converted into an interactive checklist') ||
+          t.includes('here is your document converted') ||
+          t.includes('here is your list converted') ||
+          t.includes('interactive checklist for your document') ||
+          t.startsWith('here is your checklist')
+        );
+      };
+
+      const docBlocks = editor.document;
+      const conversationalBlocks: any[] = [];
+      const matchingBlocks: any[] = [];
+
+      const incomingItemTexts = parsedBlocks
+        .map(extractBlockText)
+        .filter(Boolean)
+        .map((t) => t.toLowerCase());
+
+      for (const b of docBlocks) {
+        if (isConversationalBlock(b)) {
+          conversationalBlocks.push(b);
+          continue;
+        }
+
+        const text = extractBlockText(b).toLowerCase();
+        if (!text) continue;
+
+        // Check if this block matches an incoming item
+        const matches = incomingItemTexts.some(
+          (inc) => inc === text || (inc.length > 3 && (inc.includes(text) || text.includes(inc)))
+        );
+        if (matches) {
+          matchingBlocks.push(b);
+        }
+      }
+
+      // Determine if we should perform an in-place replacement
+      const isDocMostlyList = docBlocks
+        .filter((b: any) => extractBlockText(b))
+        .every(
+          (b: any) =>
+            b.type === 'bulletListItem' ||
+            b.type === 'numberedListItem' ||
+            b.type === 'checkListItem' ||
+            b.type === 'paragraph'
+        );
+
+      const shouldReplace =
+        mode === 'replace' ||
+        (mode === 'auto' &&
+          isChecklistConversion &&
+          (matchingBlocks.length > 0 || (isDocMostlyList && docBlocks.length <= parsedBlocks.length + 3)));
+
+      if (shouldReplace) {
+        // Clean up any residual conversational blocks first
+        if (conversationalBlocks.length > 0) {
+          try {
+            editor.removeBlocks(conversationalBlocks);
+          } catch (e) {
+            console.warn('Could not remove conversational blocks:', e);
+          }
+        }
+
+        if (matchingBlocks.length > 0) {
+          // Replace the matching old list blocks with the new checklist blocks in-place!
+          editor.replaceBlocks(matchingBlocks, parsedBlocks);
+        } else if (mode === 'replace') {
+          // If user explicitly clicked Replace, replace all list/paragraph blocks or document
+          const targetBlocks = editor.document.filter(
+            (b: any) => b.type !== 'heading' && extractBlockText(b).length > 0
+          );
+          if (targetBlocks.length > 0) {
+            editor.replaceBlocks(targetBlocks, parsedBlocks);
+          } else {
+            editor.replaceBlocks(editor.document, parsedBlocks);
+          }
+        } else {
+          // Fallback to inserting after cursor
+          const cursor = editor.getTextCursorPosition();
+          if (cursor?.block) {
+            editor.insertBlocks(parsedBlocks, cursor.block, 'after');
+          } else {
+            editor.insertBlocks(parsedBlocks, editor.document[editor.document.length - 1], 'after');
+          }
+        }
+      } else {
+        // Normal insert mode
         const cursor = editor.getTextCursorPosition();
         if (cursor?.block) {
           editor.insertBlocks(parsedBlocks, cursor.block, 'after');
         } else {
           editor.insertBlocks(parsedBlocks, editor.document[editor.document.length - 1], 'after');
         }
-        analyzeDocument();
-        saveDocument({ content: editor.document });
       }
+
+      analyzeDocument();
+      saveDocument({ content: editor.document });
     } catch (err) {
       console.error('Failed to parse AI markdown into blocks:', err);
     }
@@ -554,7 +668,8 @@ export default function Editor({
   const handleReplaceSelectedText = async (newText: string) => {
     if (!editor) return;
     try {
-      const parsed = await editor.tryParseMarkdownToBlocks(newText);
+      const cleanText = sanitizeAIMarkdown(newText);
+      const parsed = await editor.tryParseMarkdownToBlocks(cleanText);
       const cursor = editor.getTextCursorPosition();
       if (cursor?.block && parsed.length > 0) {
         editor.replaceBlocks([cursor.block], parsed);

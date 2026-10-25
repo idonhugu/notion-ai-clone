@@ -115,6 +115,7 @@ export function AIInlineMenu({
 
   const quickActions: { label: string; icon: any; action: AIAction; defaultPrompt: string }[] = [
     { label: 'Add Clinical Presentation', icon: Stethoscope, action: 'add_presentation', defaultPrompt: 'Add clinical presentation on ' },
+    { label: 'Turn into checklist', icon: ListTodo, action: 'checklist', defaultPrompt: 'Convert this content into an interactive checklist' },
     { label: 'Draft an outline', icon: FileText, action: 'generate', defaultPrompt: 'Draft a structured outline with key sections and bullet points' },
     { label: 'Brainstorm ideas', icon: Lightbulb, action: 'generate', defaultPrompt: 'Brainstorm 5 innovative, actionable ideas' },
     { label: 'Continue writing', icon: PenTool, action: 'continue', defaultPrompt: '' },

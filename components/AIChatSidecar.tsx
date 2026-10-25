@@ -24,9 +24,11 @@ import {
   Quote,
   ExternalLink,
   Stethoscope,
+  RefreshCw,
 } from 'lucide-react';
 import { AttachedFile } from './DocumentAttachments';
 import { formatPresentationTitle } from '@/lib/titleFormatter';
+import { isChecklistMarkdown } from '@/lib/sanitizeAIMarkdown';
 
 interface ChatMessage {
   id: string;
@@ -43,7 +45,7 @@ interface AIChatSidecarProps {
   attachedFiles?: AttachedFile[];
   selectedDocument?: AttachedFile | null;
   onSelectDocument?: (file: AttachedFile | null) => void;
-  onInsertIntoPage: (markdown: string) => void;
+  onInsertIntoPage: (markdown: string, options?: { mode?: 'auto' | 'replace' | 'insert' }) => void;
 }
 
 function renderInlineSpans(text: string, onLinkClick: (href: string) => void) {
@@ -348,9 +350,9 @@ export function AIChatSidecar({
       ]
     : [
         { label: 'Add presentation...', action: 'add_presentation', icon: Stethoscope, query: 'Add presentation on ' },
+        { label: 'Turn into checklist', action: 'checklist', icon: ListTodo, query: 'Convert this document into an interactive checklist' },
         { label: 'Summarize page', action: 'summarize', icon: FileText, query: 'Summarize this page in 3 key takeaways' },
         { label: 'Action items', action: 'action_items', icon: ListTodo, query: 'Extract all action items and tasks from this document' },
-        { label: 'Critique & gaps', action: 'chat', icon: Lightbulb, query: 'What is missing or unclear in this document? Give constructive feedback' },
       ];
 
   return (
@@ -568,26 +570,51 @@ export function AIChatSidecar({
                   })()}
 
                   {/* Assistant message action bar */}
-                  {!isUser && msg.content && msg.id !== 'welcome' && (
-                    <div className="flex items-center justify-end gap-1 mt-2 pt-1.5 border-t border-neutral-200/40 dark:border-neutral-700/40 text-[11px] text-neutral-500">
-                      <button
-                        onClick={() => handleCopy(msg.id, msg.content)}
-                        className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
-                        title="Copy response"
-                      >
-                        {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
-                      </button>
-                      <button
-                        onClick={() => onInsertIntoPage(msg.content)}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded bg-purple-600/10 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600/20 font-medium transition"
-                        title="Insert directly into document canvas"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Insert to Page</span>
-                      </button>
-                    </div>
-                  )}
+                  {!isUser && msg.content && msg.id !== 'welcome' && (() => {
+                    const hasChecklist = isChecklistMarkdown(msg.content);
+                    return (
+                      <div className="flex items-center justify-end gap-1.5 mt-2 pt-1.5 border-t border-neutral-200/40 dark:border-neutral-700/40 text-[11px] text-neutral-500 flex-wrap">
+                        <button
+                          onClick={() => handleCopy(msg.id, msg.content)}
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+                          title="Copy response"
+                        >
+                          {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
+                        </button>
+
+                        {hasChecklist ? (
+                          <>
+                            <button
+                              onClick={() => onInsertIntoPage(msg.content, { mode: 'replace' })}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-600 text-white hover:bg-purple-700 font-semibold transition shadow-xs"
+                              title="Replace existing list on page with this interactive checklist"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Replace on Page</span>
+                            </button>
+                            <button
+                              onClick={() => onInsertIntoPage(msg.content, { mode: 'insert' })}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 font-medium transition"
+                              title="Add below current content without replacing"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Insert Below</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => onInsertIntoPage(msg.content, { mode: 'auto' })}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded bg-purple-600/10 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-600/20 font-medium transition"
+                            title="Insert directly into document canvas"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Insert to Page</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {isUser && (
