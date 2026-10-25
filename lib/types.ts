@@ -12,6 +12,7 @@ export type AIAction =
   | 'checklist'
   | 'chat'
   | 'add_presentation'
+  | 'clinical_evidence'
   | 'fix_grammar'
   | 'doc_summarize'
   | 'doc_notes';

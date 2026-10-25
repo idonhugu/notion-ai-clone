@@ -46,6 +46,7 @@ interface AIChatSidecarProps {
   selectedDocument?: AttachedFile | null;
   onSelectDocument?: (file: AttachedFile | null) => void;
   onInsertIntoPage: (markdown: string, options?: { mode?: 'auto' | 'replace' | 'insert' }) => void;
+  onOpenEvidence?: () => void;
 }
 
 function renderInlineSpans(text: string, onLinkClick: (href: string) => void) {
@@ -160,6 +161,7 @@ export function AIChatSidecar({
   selectedDocument = null,
   onSelectDocument,
   onInsertIntoPage,
+  onOpenEvidence,
 }: AIChatSidecarProps) {
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -401,6 +403,17 @@ export function AIChatSidecar({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {onOpenEvidence && (
+              <button
+                onClick={onOpenEvidence}
+                title="Open Clinical Evidence & Decision Support"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/80 transition shadow-xs"
+              >
+                <BookOpen className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                <span className="hidden sm:inline">Evidence</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsAddPresModalOpen(true)}
               title="Add Clinical Presentation"

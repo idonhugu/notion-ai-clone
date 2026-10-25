@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   HelpCircle,
   CopyPlus,
+  BookOpen,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -50,6 +51,7 @@ interface TopNavProps {
   isSmallText?: boolean;
   onToggleSmallText?: () => void;
   onManualSync?: () => void;
+  onOpenEvidence?: () => void;
 }
 
 export function TopNav({
@@ -73,6 +75,7 @@ export function TopNav({
   isSmallText = false,
   onToggleSmallText,
   onManualSync,
+  onOpenEvidence,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -178,6 +181,18 @@ export function TopNav({
           <Sparkles className={`w-3.5 h-3.5 ${isSidecarOpen ? 'text-white' : 'text-purple-600 dark:text-purple-400 animate-pulse'}`} />
           <span>Ask AI</span>
         </button>
+
+        {/* Evidence Decision Support (Heidi Evidence / NICE / BNF) */}
+        {onOpenEvidence && (
+          <button
+            onClick={onOpenEvidence}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/60 dark:border-emerald-800/60 transition shadow-xs"
+            title="Open Clinical Evidence & Decision Support (Cmd+E)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="hidden xs:inline">Evidence</span>
+          </button>
+        )}
 
         {/* Shortcuts Cheat Sheet trigger */}
         {onOpenShortcuts && (

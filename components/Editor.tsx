@@ -17,6 +17,7 @@ import { AIChatSidecar } from './AIChatSidecar';
 import { KanbanBoard, KanbanCard } from './KanbanBoard';
 import { TaskProgressBar } from './TaskProgressBar';
 import { ShortcutsModal } from './ShortcutsModal';
+import { ClinicalEvidenceModal } from './ClinicalEvidenceModal';
 import { SubPagesList } from './SubPagesList';
 import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
@@ -55,6 +56,7 @@ export default function Editor({
   // AI & Sidecar states
   const [isSidecarOpen, setIsSidecarOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
   const [selectedChatDoc, setSelectedChatDoc] = useState<AttachedFile | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
@@ -582,6 +584,11 @@ export default function Editor({
         setIsSidecarOpen((prev) => !prev);
       }
 
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setIsEvidenceOpen((prev) => !prev);
+      }
+
       if (isCmdOrCtrl && e.key === '/') {
         e.preventDefault();
         setIsShortcutsOpen((prev) => !prev);
@@ -592,11 +599,17 @@ export default function Editor({
       setIsSidecarOpen(true);
     };
 
+    const handleOpenEvidence = () => {
+      setIsEvidenceOpen(true);
+    };
+
     window.addEventListener('keydown', handleGlobalShortcuts);
     window.addEventListener('notion:open_ai_presentation_modal', handleOpenPres);
+    window.addEventListener('notion:open_evidence_modal', handleOpenEvidence);
     return () => {
       window.removeEventListener('keydown', handleGlobalShortcuts);
       window.removeEventListener('notion:open_ai_presentation_modal', handleOpenPres);
+      window.removeEventListener('notion:open_evidence_modal', handleOpenEvidence);
     };
   }, []);
 
@@ -929,6 +942,7 @@ export default function Editor({
         isSmallText={isSmallText}
         onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
         onManualSync={handleManualSync}
+        onOpenEvidence={() => setIsEvidenceOpen(true)}
       />
 
       {/* Cover Image banner */}
@@ -1132,6 +1146,7 @@ export default function Editor({
           selectedDocument={selectedChatDoc}
           onSelectDocument={setSelectedChatDoc}
           onInsertIntoPage={handleInsertAIMarkdown}
+          onOpenEvidence={() => setIsEvidenceOpen(true)}
         />
       </div>
 
@@ -1152,6 +1167,16 @@ export default function Editor({
       <ShortcutsModal
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      {/* Heidi Clinical Evidence Decision Support & Calculators Modal */}
+      <ClinicalEvidenceModal
+        isOpen={isEvidenceOpen}
+        onClose={() => setIsEvidenceOpen(false)}
+        currentDocId={doc.id}
+        currentDocTitle={title}
+        currentDocContext={docMarkdown}
+        onInsertIntoPage={handleInsertAIMarkdown}
       />
     </div>
   );

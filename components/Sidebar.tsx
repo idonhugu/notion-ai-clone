@@ -19,6 +19,7 @@ import {
   LayoutTemplate,
   Archive,
   RefreshCw,
+  BookOpen,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -308,6 +309,24 @@ export function Sidebar({
             <span>Sync Workspace</span>
           </div>
           <span className="text-[10px] text-emerald-500 font-medium">Cloud</span>
+        </button>
+
+        {/* Clinical Evidence (Heidi Decision Support) */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('notion:open_evidence_modal'));
+            setIsMobileOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition font-medium"
+          title="Clinical Evidence & Decision Support (Cmd+E)"
+        >
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Clinical Evidence</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-semibold">
+            Heidi
+          </span>
         </button>
 
         {/* New Page button */}

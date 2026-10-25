@@ -28,12 +28,13 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
 
   const sections = [
     {
-      title: "Laksha's AI Superpowers",
+      title: "Laksha's AI & Clinical Evidence",
       icon: Sparkles,
       iconColor: 'text-purple-600 dark:text-purple-400',
       items: [
-        { keys: ['Space'], desc: 'Open AI on an empty line' },
+        { keys: ['Cmd', 'E'], desc: 'Open Heidi Evidence Decision Support & Calculators' },
         { keys: ['Cmd', 'J'], desc: 'Open AI Copilot Chat sidecar' },
+        { keys: ['Ask AI'], desc: 'Open AI formatting & drafting menu' },
         { keys: ['Select text'], desc: 'Trigger AI rewrite, summarize, or translate' },
       ],
     },
