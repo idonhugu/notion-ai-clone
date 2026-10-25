@@ -18,8 +18,10 @@ import { KanbanBoard, KanbanCard } from './KanbanBoard';
 import { TaskProgressBar } from './TaskProgressBar';
 import { ShortcutsModal } from './ShortcutsModal';
 import { SubPagesList } from './SubPagesList';
+import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
+import { NotionFontStyle, NOTION_FONTS } from '@/lib/notionStyles';
 
 interface EditorProps {
   document: Document;
@@ -71,6 +73,39 @@ export default function Editor({
     }
     return [];
   });
+
+  // Font family and sizing
+  const [fontStyle, setFontStyle] = useState<NotionFontStyle>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`notion_font_${initialDoc.id}`);
+      if (saved === 'sans' || saved === 'serif' || saved === 'mono') return saved;
+    }
+    const entry = (initialDoc.attachments || []).find((f: any) => f.id === '__page_style__');
+    if (entry && entry.url) {
+      try {
+        const parsed = JSON.parse(entry.url);
+        if (parsed.fontStyle) return parsed.fontStyle;
+      } catch {}
+    }
+    return 'sans';
+  });
+
+  const [isSmallText, setIsSmallText] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`notion_small_text_${initialDoc.id}`);
+      if (saved !== null) return saved === 'true';
+    }
+    const entry = (initialDoc.attachments || []).find((f: any) => f.id === '__page_style__');
+    if (entry && entry.url) {
+      try {
+        const parsed = JSON.parse(entry.url);
+        if (typeof parsed.isSmallText === 'boolean') return parsed.isSmallText;
+      } catch {}
+    }
+    return false;
+  });
+
+  const [activeStyles, setActiveStyles] = useState<any>({});
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -165,10 +200,12 @@ export default function Editor({
               top: rect.top + window.scrollY,
               left: rect.left + window.scrollX,
             });
+            setActiveStyles(editor.getActiveStyles() || {});
           }
         } else {
           setSelectedText('');
           setFloatingMenuPos(null);
+          setActiveStyles(editor.getActiveStyles() || {});
         }
       } catch (err) {
         // Selection out of bounds or not ready
@@ -251,6 +288,107 @@ export default function Editor({
     const updated = [...otherAttachments, kanbanEntry];
     setAttachments(updated);
     saveDocument({ attachments: updated });
+  };
+
+  // Handle Page Font & Sizing persistence
+  const handleUpdatePageStyle = (newFont: NotionFontStyle, newSmallText: boolean) => {
+    setFontStyle(newFont);
+    setIsSmallText(newSmallText);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`notion_font_${doc.id}`, newFont);
+      localStorage.setItem(`notion_small_text_${doc.id}`, String(newSmallText));
+    }
+
+    const otherAttachments = attachments.filter((f) => f.id !== '__page_style__');
+    const stylePayload = { fontStyle: newFont, isSmallText: newSmallText };
+    const styleEntry: AttachedFile = {
+      id: '__page_style__',
+      name: 'Page Style Configuration',
+      size: JSON.stringify(stylePayload).length,
+      type: 'application/vnd.notion.style+json',
+      url: JSON.stringify(stylePayload),
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const updated = [...otherAttachments, styleEntry];
+    setAttachments(updated);
+    saveDocument({ attachments: updated });
+  };
+
+  // Toggle text format mark: bold, italic, underline, strike, code
+  const handleToggleStyle = (style: 'bold' | 'italic' | 'underline' | 'strike' | 'code') => {
+    if (!editor) return;
+    try {
+      editor.toggleStyles({ [style]: true } as any);
+      setActiveStyles(editor.getActiveStyles() || {});
+    } catch (e) {
+      console.warn('Toggle style error:', e);
+    }
+  };
+
+  // Apply text color
+  const handleApplyTextColor = (color: string) => {
+    if (!editor) return;
+    try {
+      if (color === 'default') {
+        editor.removeStyles({ textColor: true } as any);
+      } else {
+        editor.addStyles({ textColor: color } as any);
+      }
+
+      // If no text is selected, color the current block
+      const cursor = editor.getTextCursorPosition();
+      if (cursor?.block && !editor.getSelectedText()) {
+        editor.updateBlock(cursor.block, {
+          props: { textColor: color },
+        } as any);
+      }
+      setActiveStyles(editor.getActiveStyles() || {});
+      saveDocument({ content: editor.document });
+    } catch (e) {
+      console.warn('Apply text color error:', e);
+    }
+  };
+
+  // Apply background highlight color
+  const handleApplyBgColor = (color: string) => {
+    if (!editor) return;
+    try {
+      if (color === 'default') {
+        editor.removeStyles({ backgroundColor: true } as any);
+      } else {
+        editor.addStyles({ backgroundColor: color } as any);
+      }
+
+      // If no text is selected, color the current block
+      const cursor = editor.getTextCursorPosition();
+      if (cursor?.block && !editor.getSelectedText()) {
+        editor.updateBlock(cursor.block, {
+          props: { backgroundColor: color },
+        } as any);
+      }
+      setActiveStyles(editor.getActiveStyles() || {});
+      saveDocument({ content: editor.document });
+    } catch (e) {
+      console.warn('Apply bg color error:', e);
+    }
+  };
+
+  // Align text
+  const handleAlignText = (alignment: 'left' | 'center' | 'right') => {
+    if (!editor) return;
+    try {
+      const cursor = editor.getTextCursorPosition();
+      if (cursor?.block) {
+        editor.updateBlock(cursor.block, {
+          props: { textAlignment: alignment },
+        } as any);
+        saveDocument({ content: editor.document });
+      }
+    } catch (e) {
+      console.warn('Align text error:', e);
+    }
   };
 
   // Duplicate current page
@@ -472,6 +610,10 @@ export default function Editor({
         onDelete={onDelete ? () => onDelete(doc.id) : undefined}
         wordCount={wordCount}
         onExportMarkdown={handleExportMarkdown}
+        currentFont={fontStyle}
+        onSelectFont={(f) => handleUpdatePageStyle(f, isSmallText)}
+        isSmallText={isSmallText}
+        onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
       />
 
       {/* Cover Image banner */}
@@ -584,9 +726,33 @@ export default function Editor({
                 />
               )}
 
-              {/* Core BlockNote Editor Canvas with Dynamic Theme Matching */}
+              {/* Quick Notion Formatting Bar (Typography & Color Palette) */}
+              <EditorToolbar
+                currentFont={fontStyle}
+                onSelectFont={(f) => handleUpdatePageStyle(f, isSmallText)}
+                isSmallText={isSmallText}
+                onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
+                onToggleStyle={handleToggleStyle}
+                onApplyTextColor={handleApplyTextColor}
+                onApplyBgColor={handleApplyBgColor}
+                onAlignText={handleAlignText}
+                onOpenAI={() => setShowInlineAI(true)}
+                activeStyles={activeStyles}
+              />
+
+              {/* Core BlockNote Editor Canvas with Dynamic Theme & Font Typography Matching */}
               <div
-                className="min-h-[420px]"
+                className={`min-h-[420px] transition-all ${
+                  fontStyle === 'serif' ? 'font-serif' : fontStyle === 'mono' ? 'font-mono' : 'font-sans'
+                } ${isSmallText ? 'text-[14px]' : 'text-[15px]'}`}
+                style={{
+                  fontFamily:
+                    fontStyle === 'serif'
+                      ? 'Charter, Georgia, Cambria, "Times New Roman", Times, serif'
+                      : fontStyle === 'mono'
+                      ? '"JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, monospace'
+                      : '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif',
+                }}
                 onKeyDown={handleKeyDown}
                 onClickCapture={(e) => {
                   const target = e.target as HTMLElement;
@@ -661,6 +827,9 @@ export default function Editor({
           position={floatingMenuPos}
           onClose={() => setFloatingMenuPos(null)}
           onReplaceSelection={handleReplaceSelectedText}
+          onToggleStyle={handleToggleStyle}
+          onApplyTextColor={handleApplyTextColor}
+          onApplyBgColor={handleApplyBgColor}
         />
       )}
 

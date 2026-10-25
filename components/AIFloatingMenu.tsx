@@ -13,14 +13,24 @@ import {
   RotateCcw,
   Languages,
   ChevronDown,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  Code,
+  Palette,
 } from 'lucide-react';
 import { AIAction } from '@/lib/types';
+import { NOTION_COLORS } from '@/lib/notionStyles';
 
 interface AIFloatingMenuProps {
   selectedText: string;
   onReplaceSelection: (newText: string) => void;
   onClose: () => void;
   position: { top: number; left: number } | null;
+  onToggleStyle?: (style: 'bold' | 'italic' | 'underline' | 'strike' | 'code') => void;
+  onApplyTextColor?: (color: string) => void;
+  onApplyBgColor?: (color: string) => void;
 }
 
 const LANGUAGES = [
@@ -43,6 +53,9 @@ export function AIFloatingMenu({
   onReplaceSelection,
   onClose,
   position,
+  onToggleStyle,
+  onApplyTextColor,
+  onApplyBgColor,
 }: AIFloatingMenuProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [streamedText, setStreamedText] = useState('');
@@ -50,6 +63,8 @@ export function AIFloatingMenu({
   const [error, setError] = useState<string | null>(null);
   const [isTranslateOpen, setIsTranslateOpen] = useState(false);
   const [isToneOpen, setIsToneOpen] = useState(false);
+  const [isColorOpen, setIsColorOpen] = useState(false);
+  const [colorTab, setColorTab] = useState<'text' | 'bg'>('text');
 
   if (!position || !selectedText) return null;
 
@@ -117,7 +132,163 @@ export function AIFloatingMenu({
       {/* If no stream running yet, show clean action pills */}
       {!activeAction ? (
         <div className="flex items-center gap-1 flex-wrap">
-          <div className="flex items-center gap-1 px-2 py-1 text-purple-600 dark:text-purple-400 font-semibold text-xs border-r border-neutral-200 dark:border-neutral-800">
+          {/* Quick Rich Text Styles */}
+          {onToggleStyle && (
+            <div className="flex items-center gap-0.5 border-r border-neutral-200 dark:border-neutral-800 pr-1 mr-0.5">
+              <button
+                type="button"
+                onClick={() => onToggleStyle('bold')}
+                className="p-1 rounded text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                title="Bold (Cmd+B)"
+              >
+                <Bold className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleStyle('italic')}
+                className="p-1 rounded text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                title="Italic (Cmd+I)"
+              >
+                <Italic className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleStyle('underline')}
+                className="p-1 rounded text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                title="Underline (Cmd+U)"
+              >
+                <Underline className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleStyle('strike')}
+                className="p-1 rounded text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                title="Strikethrough"
+              >
+                <Strikethrough className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleStyle('code')}
+                className="p-1 rounded text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                title="Code font"
+              >
+                <Code className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Color Palette Popover on selection */}
+          {(onApplyTextColor || onApplyBgColor) && (
+            <div className="relative border-r border-neutral-200 dark:border-neutral-800 pr-1 mr-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsColorOpen(!isColorOpen);
+                  setIsToneOpen(false);
+                  setIsTranslateOpen(false);
+                }}
+                className="flex items-center gap-1 px-1.5 py-1 text-xs text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition"
+                title="Change color of selected text"
+              >
+                <Palette className="w-3.5 h-3.5 text-purple-500" />
+                <span className="font-semibold text-[11px]">Color</span>
+                <ChevronDown className="w-2.5 h-2.5 text-neutral-400" />
+              </button>
+
+              {isColorOpen && (
+                <div className="absolute left-0 top-8 z-50 w-60 bg-white dark:bg-[#202020] border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl p-2 animate-in fade-in duration-100">
+                  <div className="flex items-center rounded-lg bg-neutral-100 dark:bg-neutral-800 p-0.5 mb-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setColorTab('text')}
+                      className={`flex-1 py-0.5 rounded font-semibold text-center text-[11px] transition ${
+                        colorTab === 'text'
+                          ? 'bg-white dark:bg-neutral-900 text-purple-700 dark:text-purple-300 shadow-2xs'
+                          : 'text-neutral-600 dark:text-neutral-400'
+                      }`}
+                    >
+                      Text Color
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setColorTab('bg')}
+                      className={`flex-1 py-0.5 rounded font-semibold text-center text-[11px] transition ${
+                        colorTab === 'bg'
+                          ? 'bg-white dark:bg-neutral-900 text-purple-700 dark:text-purple-300 shadow-2xs'
+                          : 'text-neutral-600 dark:text-neutral-400'
+                      }`}
+                    >
+                      Background
+                    </button>
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto space-y-0.5">
+                    {colorTab === 'text' ? (
+                      NOTION_COLORS.map((col) => (
+                        <button
+                          key={col.id}
+                          type="button"
+                          onClick={() => {
+                            onApplyTextColor?.(col.id);
+                            setIsColorOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between px-2 py-1 rounded text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-3.5 h-3.5 rounded-full border border-black/10 dark:border-white/10 flex items-center justify-center text-[9px] font-bold"
+                              style={{
+                                backgroundColor: col.id === 'default' ? 'transparent' : col.swatchHex,
+                                color: col.id === 'default' ? 'inherit' : '#ffffff',
+                              }}
+                            >
+                              A
+                            </span>
+                            <span style={{ color: col.id === 'default' ? 'inherit' : col.swatchHex }}>
+                              {col.label}
+                            </span>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      NOTION_COLORS.map((col) => (
+                        <button
+                          key={col.id}
+                          type="button"
+                          onClick={() => {
+                            onApplyBgColor?.(col.id);
+                            setIsColorOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between px-2 py-1 rounded text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-3.5 h-3.5 rounded-sm border border-neutral-300 dark:border-neutral-700"
+                              style={{
+                                backgroundColor: col.id === 'default' ? 'transparent' : col.swatchHex,
+                              }}
+                            />
+                            <span
+                              className="px-1 py-0.5 rounded text-[11px]"
+                              style={{
+                                backgroundColor: col.id === 'default' ? 'transparent' : col.bgLight,
+                                color: col.id === 'default' ? 'inherit' : col.textColorLight,
+                              }}
+                            >
+                              {col.label} Background
+                            </span>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 px-1.5 py-1 text-purple-600 dark:text-purple-400 font-semibold text-xs">
             <Sparkles className="w-3.5 h-3.5" />
             <span>AI</span>
           </div>

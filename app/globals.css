@@ -63,9 +63,14 @@ body {
   background-color: transparent !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
-  font-size: 15px;
+  font-size: inherit;
   line-height: 1.65;
   color: inherit !important;
+  font-family: inherit !important;
+}
+
+.bn-inline-content {
+  font-family: inherit !important;
 }
 
 .dark .bn-container,
@@ -73,6 +78,50 @@ body {
   background: transparent !important;
   color: #ededed !important;
 }
+
+/* Notion Authentic Text Colors */
+[data-text-color="gray"] { color: #787774 !important; }
+[data-text-color="brown"] { color: #9f6b53 !important; }
+[data-text-color="orange"] { color: #d9730d !important; }
+[data-text-color="yellow"] { color: #cb912f !important; }
+[data-text-color="green"] { color: #448361 !important; }
+[data-text-color="blue"] { color: #337ea9 !important; }
+[data-text-color="purple"] { color: #9065b0 !important; }
+[data-text-color="pink"] { color: #c14c8a !important; }
+[data-text-color="red"] { color: #d44c47 !important; }
+
+/* Dark mode text colors */
+.dark [data-text-color="gray"] { color: #9b9a97 !important; }
+.dark [data-text-color="brown"] { color: #ba856f !important; }
+.dark [data-text-color="orange"] { color: #c77d48 !important; }
+.dark [data-text-color="yellow"] { color: #ca9849 !important; }
+.dark [data-text-color="green"] { color: #529e72 !important; }
+.dark [data-text-color="blue"] { color: #5e87c9 !important; }
+.dark [data-text-color="purple"] { color: #9d68d3 !important; }
+.dark [data-text-color="pink"] { color: #c3558c !important; }
+.dark [data-text-color="red"] { color: #df5452 !important; }
+
+/* Notion Authentic Background Highlight Colors */
+[data-background-color="gray"] { background-color: #f1f1ef !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="brown"] { background-color: #f4eeee !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="orange"] { background-color: #fbecdd !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="yellow"] { background-color: #fbf3db !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="green"] { background-color: #edf3ec !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="blue"] { background-color: #e7f3f8 !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="purple"] { background-color: #f4f0f7 !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="pink"] { background-color: #fbf0f4 !important; border-radius: 3px; padding: 0.1em 0.25em; }
+[data-background-color="red"] { background-color: #fdebec !important; border-radius: 3px; padding: 0.1em 0.25em; }
+
+/* Dark mode background highlight colors */
+.dark [data-background-color="gray"] { background-color: #2f2f2f !important; }
+.dark [data-background-color="brown"] { background-color: #382e2b !important; }
+.dark [data-background-color="orange"] { background-color: #3d2e24 !important; }
+.dark [data-background-color="yellow"] { background-color: #3d3725 !important; }
+.dark [data-background-color="green"] { background-color: #24362b !important; }
+.dark [data-background-color="blue"] { background-color: #233247 !important; }
+.dark [data-background-color="purple"] { background-color: #362846 !important; }
+.dark [data-background-color="pink"] { background-color: #3b2633 !important; }
+.dark [data-background-color="red"] { background-color: #3e2828 !important; }
 
 /* Inline AI animation pulse */
 @keyframes ai-glow {

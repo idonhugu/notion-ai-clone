@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
+import { NOTION_FONTS, NotionFontStyle } from '@/lib/notionStyles';
 
 interface TopNavProps {
   document: Document;
@@ -44,6 +45,10 @@ interface TopNavProps {
   onDelete?: () => void;
   wordCount: number;
   onExportMarkdown: () => void;
+  currentFont?: NotionFontStyle;
+  onSelectFont?: (font: NotionFontStyle) => void;
+  isSmallText?: boolean;
+  onToggleSmallText?: () => void;
 }
 
 export function TopNav({
@@ -62,6 +67,10 @@ export function TopNav({
   onDelete,
   wordCount,
   onExportMarkdown,
+  currentFont = 'sans',
+  onSelectFont,
+  isSmallText = false,
+  onToggleSmallText,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -256,7 +265,69 @@ export function TopNav({
           </button>
 
           {isMoreOpen && (
-            <div className="absolute right-0 top-9 z-40 w-48 bg-white dark:bg-[#202020] rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 p-1.5 text-xs text-neutral-700 dark:text-neutral-200">
+            <div className="absolute right-0 top-9 z-40 w-56 bg-white dark:bg-[#202020] rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-800 p-2 text-xs text-neutral-700 dark:text-neutral-200 animate-in fade-in duration-100">
+              {/* Style / Font family section (Notion style) */}
+              <div className="px-1.5 py-1 text-[10px] uppercase font-bold text-neutral-400">
+                Style
+              </div>
+              <div className="grid grid-cols-3 gap-1 px-1 pb-2">
+                {NOTION_FONTS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => onSelectFont?.(f.id)}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition ${
+                      currentFont === f.id
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold'
+                        : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                    }`}
+                  >
+                    <span className={`text-sm ${f.cssClass}`}>{f.preview}</span>
+                    <span className="text-[10px] mt-0.5">{f.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800 my-1" />
+
+              {/* Small text switch */}
+              <button
+                type="button"
+                onClick={() => onToggleSmallText?.()}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+              >
+                <span>Small text</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    isSmallText
+                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                      : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                  }`}
+                >
+                  {isSmallText ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              {/* Full width switch */}
+              <button
+                type="button"
+                onClick={onToggleFullWidth}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+              >
+                <span>Full width</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    isFullWidth
+                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                      : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                  }`}
+                >
+                  {isFullWidth ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800 my-1" />
+
               <button
                 onClick={() => {
                   onExportMarkdown();
