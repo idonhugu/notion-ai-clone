@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import { FileText, Kanban, Sparkles } from 'lucide-react';
@@ -33,6 +34,7 @@ export default function Editor({
   onDelete,
   onUpdateDocument,
 }: EditorProps) {
+  const router = useRouter();
   const { theme } = useTheme();
   const [doc, setDoc] = useState<Document>(initialDoc);
   const [title, setTitle] = useState(initialDoc.title || 'Untitled');
@@ -517,7 +519,22 @@ export default function Editor({
               )}
 
               {/* Core BlockNote Editor Canvas with Dynamic Theme Matching */}
-              <div className="min-h-[420px]" onKeyDown={handleKeyDown}>
+              <div
+                className="min-h-[420px]"
+                onKeyDown={handleKeyDown}
+                onClickCapture={(e) => {
+                  const target = e.target as HTMLElement;
+                  const anchor = target?.closest('a');
+                  if (anchor) {
+                    const href = anchor.getAttribute('href');
+                    if (href && href.startsWith('/doc/')) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      router.push(href);
+                    }
+                  }
+                }}
+              >
                 <BlockNoteView
                   editor={editor}
                   onChange={handleEditorChange}
