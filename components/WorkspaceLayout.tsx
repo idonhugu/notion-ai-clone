@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Document } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import {
   fetchAllDocuments,
   updateDocument,
@@ -27,7 +28,7 @@ export function WorkspaceLayout({
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Load user info & documents
+  // Load user info & documents with multi-device Supabase Realtime & mobile auto-sync
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('notion_user');
@@ -40,11 +41,12 @@ export function WorkspaceLayout({
     }
 
     let isMounted = true;
+    const supabase = createClient();
 
     async function loadDocs() {
       try {
         const data = await fetchAllDocuments();
-        if (isMounted) {
+        if (isMounted && Array.isArray(data) && data.length > 0) {
           setDocuments(data);
         }
       } catch (err) {
@@ -61,7 +63,50 @@ export function WorkspaceLayout({
 
     loadDocs();
 
-    // Real-time synchronization listeners for document events
+    // 1. Multi-device Supabase Realtime subscription
+    const channel = supabase
+      .channel('realtime_documents_global')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'documents' },
+        (payload: any) => {
+          if (!isMounted) return;
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newDoc = payload.new as Document;
+            setDocuments((prev) => {
+              if (prev.some((d) => d.id === newDoc.id)) return prev;
+              return [newDoc, ...prev];
+            });
+            window.dispatchEvent(new CustomEvent('notion:doc_created', { detail: newDoc }));
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const updated = payload.new as Document;
+            setDocuments((prev) =>
+              prev.map((d) => (d.id === updated.id ? { ...d, ...updated } : d))
+            );
+            window.dispatchEvent(new CustomEvent('notion:doc_updated', { detail: updated }));
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            const deletedId = payload.old.id;
+            setDocuments((prev) => prev.filter((d) => d.id !== deletedId));
+            window.dispatchEvent(
+              new CustomEvent('notion:doc_deleted', { detail: { id: deletedId, permanent: true } })
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Mobile automatic re-sync on tab focus or screen unlock
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadDocs();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('notion:sync_requested', loadDocs);
+
+    // 3. Local DOM custom events
     const handleDocUpdated = (e: Event) => {
       const { detail } = e as CustomEvent<Partial<Document> & { id: string }>;
       if (detail && detail.id) {
@@ -76,7 +121,7 @@ export function WorkspaceLayout({
       if (detail && detail.id) {
         setDocuments((prev) => {
           if (prev.some((d) => d.id === detail.id)) return prev;
-          return [...prev, detail];
+          return [detail, ...prev];
         });
       }
     };
@@ -98,9 +143,13 @@ export function WorkspaceLayout({
 
     return () => {
       isMounted = false;
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('notion:sync_requested', loadDocs);
       window.removeEventListener('notion:doc_updated', handleDocUpdated);
       window.removeEventListener('notion:doc_created', handleDocCreated);
       window.removeEventListener('notion:doc_deleted', handleDocDeleted);
+      supabase.removeChannel(channel);
     };
   }, []);
 

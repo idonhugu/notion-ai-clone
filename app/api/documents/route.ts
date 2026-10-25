@@ -4,6 +4,13 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 const DEFAULT_URL = 'https://dkualqsjkxojzjojilfh.supabase.co';
 const DEFAULT_KEY_B64 = 'c2Jfc2VjcmV0XzVLV0hGcVVJQ2JaLTBadTl5M2Q5RmdfVlVtSm1LVVk=';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+};
+
 export const STARTER_DOC_PAYLOAD = {
   id: '06a072bf-5084-42c5-9c8d-008265f928e7',
   user_id: 'admin-user',
@@ -99,7 +106,7 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error('Error fetching documents from Supabase:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: error.message }, { status: 500, headers: NO_CACHE_HEADERS });
     }
 
     // Auto-seed starter doc if workspace is completely empty (and not a specific subpage query)
@@ -112,18 +119,18 @@ export async function GET(req: NextRequest) {
           .single();
 
         if (seeded) {
-          return NextResponse.json([seeded]);
+          return NextResponse.json([seeded], { headers: NO_CACHE_HEADERS });
         }
       } catch (seedErr) {
         console.warn('Auto-seed document insert warning:', seedErr);
-        return NextResponse.json([STARTER_DOC_PAYLOAD]);
+        return NextResponse.json([STARTER_DOC_PAYLOAD], { headers: NO_CACHE_HEADERS });
       }
     }
 
-    return NextResponse.json(data || []);
+    return NextResponse.json(data || [], { headers: NO_CACHE_HEADERS });
   } catch (err: any) {
     console.error('Documents GET error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 

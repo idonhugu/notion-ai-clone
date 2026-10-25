@@ -63,9 +63,9 @@ export function EditorToolbar({
   const fontRef = useRef<HTMLDivElement>(null);
   const colorRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click or touch
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (fontRef.current && !fontRef.current.contains(e.target as Node)) {
         setIsFontOpen(false);
       }
@@ -74,14 +74,18 @@ export function EditorToolbar({
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const activeFontObj = NOTION_FONTS.find((f) => f.id === currentFont) || NOTION_FONTS[0];
 
   return (
-    <div className="sticky top-[49px] z-20 flex items-center justify-between gap-1 p-1 mb-4 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-white/95 dark:bg-[#1f1f1f]/95 backdrop-blur-md shadow-xs select-none transition-all">
-      <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
+    <div className="sticky top-[49px] z-20 flex items-center justify-between gap-1 p-1 mb-4 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-white/95 dark:bg-[#1f1f1f]/95 backdrop-blur-md shadow-xs select-none transition-all overflow-x-auto no-scrollbar max-w-full">
+      <div className="flex items-center gap-0.5 sm:gap-1 flex-nowrap flex-shrink-0">
         {/* Font Family Dropdown */}
         <div ref={fontRef} className="relative">
           <button
@@ -390,7 +394,7 @@ export function EditorToolbar({
       <button
         type="button"
         onClick={onOpenAI}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100/80 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/80 transition shadow-2xs"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100/80 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/80 transition shadow-2xs flex-shrink-0 ml-1.5"
         title="Ask Laksha's AI to write, edit, or format"
       >
         <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />

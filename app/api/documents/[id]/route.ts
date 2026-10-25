@@ -4,6 +4,13 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 const DEFAULT_URL = 'https://dkualqsjkxojzjojilfh.supabase.co';
 const DEFAULT_KEY_B64 = 'c2Jfc2VjcmV0XzVLV0hGcVVJQ2JaLTBadTl5M2Q5RmdfVlVtSm1LVVk=';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+};
+
 const DEFAULT_STARTER_DOC = {
   id: '06a072bf-5084-42c5-9c8d-008265f928e7',
   user_id: 'admin-user',
@@ -121,15 +128,15 @@ export async function GET(
     if (!doc) {
       // Return starter doc if requested or if id is welcome-page or starter ID
       if (id === DEFAULT_STARTER_DOC.id || id === 'welcome-page') {
-        return NextResponse.json({ document: DEFAULT_STARTER_DOC, parentDocument: null });
+        return NextResponse.json({ document: DEFAULT_STARTER_DOC, parentDocument: null }, { headers: NO_CACHE_HEADERS });
       }
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Document not found' }, { status: 404, headers: NO_CACHE_HEADERS });
     }
 
-    return NextResponse.json({ document: doc, parentDocument: parentDoc });
+    return NextResponse.json({ document: doc, parentDocument: parentDoc }, { headers: NO_CACHE_HEADERS });
   } catch (err: any) {
     console.error('Document GET error:', err);
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 

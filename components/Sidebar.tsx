@@ -18,6 +18,7 @@ import {
   FolderPlus,
   LayoutTemplate,
   Archive,
+  RefreshCw,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -51,6 +52,7 @@ export function Sidebar({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -289,6 +291,23 @@ export function Sidebar({
         >
           <LayoutTemplate className="w-3.5 h-3.5 text-purple-600" />
           <span>Templates</span>
+        </button>
+
+        {/* Sync Workspace button */}
+        <button
+          onClick={() => {
+            setIsSyncing(true);
+            window.dispatchEvent(new CustomEvent('notion:sync_requested'));
+            setTimeout(() => setIsSyncing(false), 800);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition"
+          title="Force-sync workspace with cloud database"
+        >
+          <div className="flex items-center gap-2">
+            <RefreshCw className={`w-3.5 h-3.5 text-purple-500 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>Sync Workspace</span>
+          </div>
+          <span className="text-[10px] text-emerald-500 font-medium">Cloud</span>
         </button>
 
         {/* New Page button */}

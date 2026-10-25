@@ -158,28 +158,109 @@ export default function Editor({
     }
   }, [editor]);
 
-  // Listen for live updates to this document (e.g. when AI automatically updates the index)
+  // Listen for live updates to this document & auto-resync when returning to tab/app on mobile
   useEffect(() => {
-    const handleDocUpdatedEvent = async (e: any) => {
-      if (e?.detail?.id === doc.id) {
-        try {
-          const res = await fetch(`/api/documents/${doc.id}`, { cache: 'no-store' });
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.document?.content && editor) {
-              editor.replaceBlocks(editor.document, data.document.content);
+    const fetchLatestDoc = async () => {
+      try {
+        const res = await fetch(`/api/documents/${doc.id}?_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.document && editor) {
+            const remoteDoc = data.document;
+            if (remoteDoc.title && remoteDoc.title !== title) setTitle(remoteDoc.title);
+            if (remoteDoc.icon !== undefined) setIcon(remoteDoc.icon);
+            if (remoteDoc.cover_image !== undefined) setCoverImage(remoteDoc.cover_image);
+            if (remoteDoc.attachments !== undefined) setAttachments(remoteDoc.attachments);
+            if (
+              remoteDoc.content &&
+              Array.isArray(remoteDoc.content) &&
+              JSON.stringify(remoteDoc.content) !== JSON.stringify(editor.document)
+            ) {
+              editor.replaceBlocks(editor.document, remoteDoc.content);
               analyzeDocument();
             }
+            setSaveStatus('saved');
           }
-        } catch {}
+        }
+      } catch (err) {
+        console.warn('Auto-resync fetch error:', err);
+      }
+    };
+
+    const handleDocUpdatedEvent = async (e: any) => {
+      if (e?.detail?.id === doc.id) {
+        if (
+          e.detail?.content &&
+          editor &&
+          JSON.stringify(e.detail.content) !== JSON.stringify(editor.document)
+        ) {
+          editor.replaceBlocks(editor.document, e.detail.content);
+          analyzeDocument();
+        } else {
+          fetchLatestDoc();
+        }
+      }
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestDoc();
       }
     };
 
     window.addEventListener('notion:doc_updated', handleDocUpdatedEvent);
+    window.addEventListener('notion:force_doc_sync', fetchLatestDoc);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
     return () => {
       window.removeEventListener('notion:doc_updated', handleDocUpdatedEvent);
+      window.removeEventListener('notion:force_doc_sync', fetchLatestDoc);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
-  }, [doc.id, editor, analyzeDocument]);
+  }, [doc.id, editor, analyzeDocument, title]);
+
+  // Immediate save flush when mobile user leaves app, switches tabs, or locks screen
+  useEffect(() => {
+    const handleFlushSave = () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+        if (editor) {
+          const payload = {
+            title,
+            content: editor.document,
+            icon,
+            cover_image: coverImage,
+            is_favorite: isFavorite,
+            attachments,
+            updated_at: new Date().toISOString(),
+          };
+          updateDocument(doc.id, payload);
+          setSaveStatus('saved');
+        }
+      }
+    };
+
+    window.addEventListener('pagehide', handleFlushSave);
+    window.addEventListener('beforeunload', handleFlushSave);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        handleFlushSave();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('pagehide', handleFlushSave);
+      window.removeEventListener('beforeunload', handleFlushSave);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [doc.id, title, icon, coverImage, isFavorite, attachments, editor]);
 
   // Track selection changes for the floating action menu
   useEffect(() => {
@@ -273,6 +354,38 @@ export default function Editor({
     analyzeDocument();
     saveDocument({ content: editor.document });
   };
+
+  // Manual force-sync with cloud database
+  const handleManualSync = useCallback(async () => {
+    setSaveStatus('saving');
+    if (editor) {
+      const payload = {
+        title,
+        content: editor.document,
+        icon,
+        cover_image: coverImage,
+        is_favorite: isFavorite,
+        attachments,
+        updated_at: new Date().toISOString(),
+      };
+      await updateDocument(doc.id, payload);
+    }
+    window.dispatchEvent(new CustomEvent('notion:sync_requested'));
+    try {
+      const res = await fetch(`/api/documents/${doc.id}?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.document?.content && editor) {
+          editor.replaceBlocks(editor.document, data.document.content);
+          analyzeDocument();
+        }
+      }
+    } catch {}
+    setSaveStatus('saved');
+  }, [doc.id, title, icon, coverImage, isFavorite, attachments, editor, analyzeDocument]);
 
   // Kanban update handler
   const handleUpdateCards = (newCards: KanbanCard[]) => {
@@ -729,6 +842,7 @@ export default function Editor({
         onSelectFont={(f) => handleUpdatePageStyle(f, isSmallText)}
         isSmallText={isSmallText}
         onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
+        onManualSync={handleManualSync}
       />
 
       {/* Cover Image banner */}

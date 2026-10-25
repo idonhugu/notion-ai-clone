@@ -49,6 +49,7 @@ interface TopNavProps {
   onSelectFont?: (font: NotionFontStyle) => void;
   isSmallText?: boolean;
   onToggleSmallText?: () => void;
+  onManualSync?: () => void;
 }
 
 export function TopNav({
@@ -71,6 +72,7 @@ export function TopNav({
   onSelectFont,
   isSmallText = false,
   onToggleSmallText,
+  onManualSync,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -124,35 +126,35 @@ export function TopNav({
           <span className="truncate">{doc.title || 'Untitled'}</span>
         </div>
 
-        <div className="h-3 w-[1px] bg-neutral-200 dark:bg-neutral-800 hidden sm:block mx-1" />
+        <div className="h-3 w-[1px] bg-neutral-200 dark:bg-neutral-800 hidden xs:block mx-0.5 sm:mx-1" />
 
-        {/* Save Status Indicator */}
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px]">
+        {/* Save & Sync Status (Visible on mobile & desktop, tap to refresh) */}
+        <button
+          type="button"
+          onClick={onManualSync}
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] hover:bg-neutral-100 dark:hover:bg-neutral-800 transition select-none flex-shrink-0 cursor-pointer"
+          title="Click to force-sync with cloud database"
+        >
           {saveStatus === 'saving' && (
             <>
               <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
               <span className="text-purple-600 dark:text-purple-400 font-medium">Syncing...</span>
             </>
           )}
-          {saveStatus === 'saved' && (
+          {(saveStatus === 'saved' || saveStatus === 'local') && (
             <>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-neutral-400">Cloud Synced</span>
-            </>
-          )}
-          {saveStatus === 'local' && (
-            <>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-neutral-400">Cloud Synced</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-neutral-500 dark:text-neutral-400 font-medium hidden xs:inline">Synced</span>
+              <span className="text-neutral-400 dark:text-neutral-500 text-[10px] hidden sm:inline">• tap to refresh</span>
             </>
           )}
           {saveStatus === 'error' && (
             <>
               <AlertCircle className="w-3 h-3 text-amber-500" />
-              <span className="text-amber-500">Unsaved changes</span>
+              <span className="text-amber-500 font-medium">Retry Sync</span>
             </>
           )}
-        </div>
+        </button>
       </div>
 
       {/* Right: Actions */}

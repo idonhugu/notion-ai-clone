@@ -3,7 +3,7 @@ import { Document } from '@/lib/types';
 export const DEFAULT_STARTER_DOC: Document = {
   id: '06a072bf-5084-42c5-9c8d-008265f928e7',
   user_id: 'admin-user',
-  title: 'Welcome to Notion AI',
+  title: "Welcome to Laksha's WorkSpace",
   icon: '🚀',
   cover_image:
     'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1600&auto=format&fit=crop&q=80',
@@ -18,7 +18,7 @@ export const DEFAULT_STARTER_DOC: Document = {
       id: 'b-1',
       type: 'heading',
       props: { level: 1 },
-      content: [{ type: 'text', text: 'Welcome to your Notion AI Workspace' }],
+      content: [{ type: 'text', text: "Welcome to Laksha's WorkSpace" }],
     },
     {
       id: 'b-2',
@@ -40,13 +40,13 @@ export const DEFAULT_STARTER_DOC: Document = {
       id: 'b-4',
       type: 'checkListItem',
       props: { checked: true },
-      content: [{ type: 'text', text: 'Google Gemini 3.5 Flash streaming active' }],
+      content: [{ type: 'text', text: 'Google Gemini Flash streaming active' }],
     },
     {
       id: 'b-5',
       type: 'checkListItem',
       props: { checked: false },
-      content: [{ type: 'text', text: 'Press Space on an empty line to ask Notion AI' }],
+      content: [{ type: 'text', text: "Press Space on an empty line to ask Laksha's AI" }],
     },
     {
       id: 'b-6',
@@ -65,7 +65,10 @@ export const DEFAULT_STARTER_DOC: Document = {
 
 export async function fetchAllDocuments(): Promise<Document[]> {
   try {
-    const res = await fetch('/api/documents', { cache: 'no-store' });
+    const res = await fetch(`/api/documents?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+    });
     if (!res.ok) throw new Error('Failed to fetch documents');
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
@@ -96,7 +99,10 @@ export async function fetchDocumentById(
   id: string
 ): Promise<{ document: Document | null; parentDocument: Document | null }> {
   try {
-    const res = await fetch(`/api/documents/${id}`, { cache: 'no-store' });
+    const res = await fetch(`/api/documents/${id}?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+    });
     if (res.ok) {
       const data = await res.json();
       if (data?.document) {
