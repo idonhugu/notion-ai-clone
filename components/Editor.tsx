@@ -161,6 +161,10 @@ export default function Editor({
   // Listen for live updates to this document & auto-resync when returning to tab/app on mobile
   useEffect(() => {
     const fetchLatestDoc = async () => {
+      // Never overwrite editor while user is actively typing or has unsaved edits
+      if (saveTimeoutRef.current !== null) return;
+      if (typeof document !== 'undefined' && document.activeElement?.closest?.('.bn-editor')) return;
+
       try {
         const res = await fetch(`/api/documents/${doc.id}?_t=${Date.now()}`, {
           cache: 'no-store',
@@ -169,6 +173,10 @@ export default function Editor({
         if (res.ok) {
           const data = await res.json();
           if (data?.document && editor) {
+            // Check again in case user started typing while fetch was in-flight
+            if (saveTimeoutRef.current !== null) return;
+            if (typeof document !== 'undefined' && document.activeElement?.closest?.('.bn-editor')) return;
+
             const remoteDoc = data.document;
             if (remoteDoc.title && remoteDoc.title !== title) setTitle(remoteDoc.title);
             if (remoteDoc.icon !== undefined) setIcon(remoteDoc.icon);
@@ -192,6 +200,9 @@ export default function Editor({
 
     const handleDocUpdatedEvent = async (e: any) => {
       if (e?.detail?.id === doc.id) {
+        if (saveTimeoutRef.current !== null) return;
+        if (typeof document !== 'undefined' && document.activeElement?.closest?.('.bn-editor')) return;
+
         if (
           e.detail?.content &&
           editor &&

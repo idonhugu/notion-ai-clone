@@ -188,6 +188,7 @@ export function AIChatSidecar({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const visibleAttachments = attachedFiles.filter((f) => f.id !== '__kanban__');
 
@@ -228,7 +229,18 @@ export function AIChatSidecar({
 
   const handleSend = async (textToSend?: string, customAction?: string) => {
     const query = textToSend || input;
-    if (!query.trim() || isLoading) return;
+    if (!query.trim()) return;
+
+    // If an existing response is streaming, cancel it cleanly
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 30000);
 
     const userMsg: ChatMessage = {
       id: `u_${Date.now()}`,
@@ -247,6 +259,7 @@ export function AIChatSidecar({
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           action: customAction || 'chat',
           prompt: query,
@@ -296,14 +309,20 @@ export function AIChatSidecar({
         }
       }
     } catch (err: any) {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId
-            ? { ...msg, content: '⚠️ Sorry, I encountered an error while processing your request. Please try again.' }
-            : msg
-        )
-      );
+      if (err?.name === 'AbortError') {
+        // aborted cleanly
+      } else {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? { ...msg, content: '⚠️ Sorry, I encountered an error while processing your request. Please try again.' }
+              : msg
+          )
+        );
+      }
     } finally {
+      clearTimeout(timeoutId);
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
   };
@@ -680,16 +699,33 @@ export function AIChatSidecar({
                   ? `Ask anything about ${activeDoc.name}...`
                   : 'Ask AI about this page or attached PDFs...'
               }
-              disabled={isLoading}
               className="w-full bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:outline-none placeholder:text-neutral-400"
             />
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="p-1 rounded-lg bg-purple-600 text-white disabled:opacity-40 hover:bg-purple-700 transition"
-            >
-              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-            </button>
+            {isLoading ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                  }
+                  setIsLoading(false);
+                }}
+                title="Stop response"
+                className="p-1 rounded-lg bg-neutral-400 text-white hover:bg-neutral-500 transition"
+              >
+                <div className="w-3.5 h-3.5 flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white rounded-xs" />
+                </div>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="p-1 rounded-lg bg-purple-600 text-white disabled:opacity-40 hover:bg-purple-700 transition"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            )}
           </form>
         </div>
 
