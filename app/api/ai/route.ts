@@ -165,19 +165,69 @@ export async function POST(req: NextRequest) {
         ((documentTitle && /presentation/i.test(documentTitle)) || (context && /NICE CKS/i.test(context))));
 
     if (isAddPresentationRequest) {
+      // Helper to extract specific condition names from the user prompt
+      const extractConditionNames = (promptText: string): string[] => {
+        let cleaned = promptText
+          .replace(/\b(please\s+)?(add|create|generate|make|insert|include|draft)\b/gi, '')
+          .replace(/\b(a\s+|one\s+|new\s+|the\s+)?(clinical\s+)?(presentation|presentations|note|notes|guidance|page|subpage)\b/gi, '')
+          .replace(/\b(on|for|about|of|regarding)\b/gi, '')
+          .trim();
+        cleaned = cleaned.replace(/^[:\-–—\s]+|[:\-–—\s]+$/g, '');
+        if (!cleaned || cleaned.length < 2) return [];
+
+        return cleaned
+          .split(/[,;\n]|(?:\band\b)/i)
+          .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+          .filter((s) => s.length >= 2 && !/^(page|subpage|note|notes|workspace|here|this|a|an|the)$/i.test(s));
+      };
+
+      const extractedConditions = extractConditionNames(prompt || '');
+
+      // Guard: If user clicked the button or sent an incomplete prompt without condition name
+      if (extractedConditions.length === 0) {
+        const helpMsg = `👋 **Which clinical presentation would you like to add?**
+
+Please specify the name of the condition, for example:
+- **Migraine**
+- **Endometriosis**
+- **Hypertension**
+- **Gout**
+- **Type 2 Diabetes**
+- **Asthma**
+
+💡 **Tip:** Type \`Add presentation on [Condition Name]\` (e.g. *Add presentation on Migraine*) or click the **Add Presentation...** button to generate the complete 9-point NICE CKS & RCGP clinical guide!`;
+
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(helpMsg));
+            controller.close();
+          },
+        });
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+          },
+        });
+      }
+
       const targetParentId = documentId || '74ae5917-c661-4e8e-b993-d9aa5052185f';
       const supabase = getAdminClient();
+      const conditionTargetStr = extractedConditions.join(', ');
 
       const clinicalPrompt = `You are an expert UK General Practice and NICE Clinical Knowledge Summaries (CKS) / RCGP author.
-The user wants to add one or more clinical presentations to their workspace: "${prompt}".
-Identify each clinical condition requested.
+The user wants to add clinical presentations for specifically: "${conditionTargetStr}".
+User prompt: "${prompt}".
+Identify each clinical condition requested in "${conditionTargetStr}".
 For EACH condition, generate comprehensive, evidence-based UK General Practice guidance strictly following the standard 9-point NICE CKS structure.
 Return a valid JSON object matching this schema:
 {
   "presentations": [
     {
-      "title": "Exact Condition Name (e.g. Polymyalgia Rheumatica)",
-      "icon": "Single appropriate medical emoji (e.g. 🦴)",
+      "title": "${extractedConditions[0] || 'Condition Name'}",
+      "icon": "Single appropriate medical emoji (e.g. 🩺, 🧠, 🫀, 🫁, 🦴)",
       "history": [
         "Site, onset, duration, character, progression, morning stiffness",
         "Associated symptoms and systemic features",

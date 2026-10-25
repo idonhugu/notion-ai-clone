@@ -45,6 +45,108 @@ interface AIChatSidecarProps {
   onInsertIntoPage: (markdown: string) => void;
 }
 
+function renderInlineSpans(text: string, onLinkClick: (href: string) => void) {
+  const tokenRegex = /(\[[^\]]+\]\([^\)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
+  const parts = text.split(tokenRegex);
+
+  return parts.map((part, idx) => {
+    if (!part) return null;
+
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^\)]+)\)$/);
+    if (linkMatch) {
+      const label = linkMatch[1];
+      const href = linkMatch[2];
+      return (
+        <a
+          key={idx}
+          href={href}
+          onClick={(e) => {
+            if (href.startsWith('/doc/')) {
+              e.preventDefault();
+              onLinkClick(href);
+            }
+          }}
+          className="text-purple-600 dark:text-purple-400 font-semibold underline underline-offset-2 hover:text-purple-700 dark:hover:text-purple-300 transition cursor-pointer"
+        >
+          {label}
+        </a>
+      );
+    }
+
+    if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+      return (
+        <strong key={idx} className="font-semibold text-neutral-900 dark:text-neutral-100">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+      return (
+        <code key={idx} className="bg-neutral-200/80 dark:bg-neutral-700 text-purple-700 dark:text-purple-300 px-1 py-0.5 rounded text-[10px] font-mono">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    return <span key={idx}>{part}</span>;
+  });
+}
+
+function renderFormattedContent(content: string, onLinkClick: (href: string) => void) {
+  if (!content) return null;
+  const lines = content.split('\n');
+
+  return (
+    <div className="space-y-1 text-xs">
+      {lines.map((line, lIdx) => {
+        const trimmed = line.trim();
+
+        if (/^---$/.test(trimmed)) {
+          return <hr key={lIdx} className="my-2 border-neutral-200 dark:border-neutral-700/60" />;
+        }
+
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4 key={lIdx} className="font-bold text-xs text-neutral-900 dark:text-neutral-100 mt-2 mb-0.5">
+              {renderInlineSpans(trimmed.slice(4), onLinkClick)}
+            </h4>
+          );
+        }
+
+        if (trimmed.startsWith('## ')) {
+          return (
+            <h3 key={lIdx} className="font-bold text-sm text-neutral-900 dark:text-neutral-100 mt-2.5 mb-1">
+              {renderInlineSpans(trimmed.slice(3), onLinkClick)}
+            </h3>
+          );
+        }
+
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={lIdx} className="flex items-start gap-1.5 pl-1 my-0.5">
+              <span className="text-purple-500 font-bold leading-tight select-none">•</span>
+              <div className="flex-1 leading-relaxed">
+                {renderInlineSpans(trimmed.slice(2), onLinkClick)}
+              </div>
+            </div>
+          );
+        }
+
+        if (!trimmed) {
+          return <div key={lIdx} className="h-1" />;
+        }
+
+        return (
+          <div key={lIdx} className="leading-relaxed">
+            {renderInlineSpans(line, onLinkClick)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AIChatSidecar({
   isOpen,
   onClose,
@@ -78,11 +180,21 @@ export function AIChatSidecar({
     }
     return true;
   });
+  const [isAddPresModalOpen, setIsAddPresModalOpen] = useState(false);
+  const [presConditionInput, setPresConditionInput] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const visibleAttachments = attachedFiles.filter((f) => f.id !== '__kanban__');
+
+  useEffect(() => {
+    const handleOpenPres = () => {
+      setIsAddPresModalOpen(true);
+    };
+    window.addEventListener('notion:open_ai_presentation_modal', handleOpenPres);
+    return () => window.removeEventListener('notion:open_ai_presentation_modal', handleOpenPres);
+  }, []);
 
   useEffect(() => {
     if (selectedDocument) {
@@ -234,7 +346,7 @@ export function AIChatSidecar({
         },
       ]
     : [
-        { label: 'Add Presentation', action: 'add_presentation', icon: Stethoscope, query: 'Add presentation on ' },
+        { label: 'Add presentation...', action: 'add_presentation', icon: Stethoscope, query: 'Add presentation on ' },
         { label: 'Summarize page', action: 'summarize', icon: FileText, query: 'Summarize this page in 3 key takeaways' },
         { label: 'Action items', action: 'action_items', icon: ListTodo, query: 'Extract all action items and tasks from this document' },
         { label: 'Critique & gaps', action: 'chat', icon: Lightbulb, query: 'What is missing or unclear in this document? Give constructive feedback' },
@@ -248,7 +360,7 @@ export function AIChatSidecar({
         onClick={onClose}
       />
 
-      <aside className="fixed inset-y-0 right-0 z-50 w-full sm:w-96 md:static md:sticky md:top-0 h-screen flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-l border-neutral-200/80 dark:border-neutral-800 flex flex-col shadow-2xl transition-all duration-200 animate-in slide-in-from-right duration-200">
+      <aside className="fixed inset-y-0 right-0 z-50 w-full sm:w-96 md:static md:sticky md:top-0 h-screen flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-l border-neutral-200/80 dark:border-neutral-800 flex flex-col shadow-2xl transition-all duration-200 animate-in slide-in-from-right duration-200 relative">
         {/* Header */}
         <div className="p-3.5 border-b border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between bg-[#fbfbfa] dark:bg-[#1f1f1f]">
           <div className="flex items-center gap-2">
@@ -266,7 +378,15 @@ export function AIChatSidecar({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsAddPresModalOpen(true)}
+              title="Add Clinical Presentation"
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-200/80 dark:border-purple-800/80 transition shadow-xs"
+            >
+              <Stethoscope className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+              <span className="hidden sm:inline">Add Pres</span>
+            </button>
             <button
               onClick={() =>
                 setMessages([
@@ -398,12 +518,16 @@ export function AIChatSidecar({
                       : 'bg-neutral-100 dark:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-neutral-200/50 dark:border-neutral-700/50 rounded-tl-none'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap font-sans">{msg.content || (
+                  {isUser ? (
+                    <div className="whitespace-pre-wrap font-sans">{msg.content}</div>
+                  ) : msg.content ? (
+                    renderFormattedContent(msg.content, (href) => router.push(href))
+                  ) : (
                     <span className="flex items-center gap-1 text-neutral-400 italic">
                       <Loader2 className="w-3 h-3 animate-spin" />
                       Thinking...
                     </span>
-                  )}</div>
+                  )}
 
                   {/* Interactive Presentation Action Card if a subpage link is present */}
                   {!isUser && msg.content && (() => {
@@ -488,7 +612,16 @@ export function AIChatSidecar({
                 return (
                   <button
                     key={idx}
-                    onClick={() => handleSend(q.query, q.action)}
+                    onClick={() => {
+                      if (q.action === 'add_presentation') {
+                        setIsAddPresModalOpen(true);
+                      } else if (q.query.endsWith('on ')) {
+                        setInput(q.query);
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      } else {
+                        handleSend(q.query, q.action);
+                      }
+                    }}
                     className="flex items-center gap-1.5 p-1.5 rounded-lg border border-neutral-200/60 dark:border-neutral-700/60 bg-white dark:bg-neutral-800 text-[11px] text-neutral-700 dark:text-neutral-300 hover:border-purple-300 dark:hover:border-purple-800 hover:text-purple-600 dark:hover:text-purple-300 transition text-left"
                   >
                     <Icon className="w-3 h-3 text-purple-500 flex-shrink-0" />
@@ -531,6 +664,107 @@ export function AIChatSidecar({
             </button>
           </form>
         </div>
+
+        {/* Interactive Add Clinical Presentation Modal */}
+        {isAddPresModalOpen && (
+          <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
+            <div className="w-full max-w-sm bg-white dark:bg-[#1e1e1e] rounded-2xl shadow-2xl border border-purple-200 dark:border-purple-800/80 p-4 space-y-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-300 flex items-center justify-center shadow-xs">
+                    <Stethoscope className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
+                      Add Clinical Presentation
+                    </h3>
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                      Creates 9-point NICE CKS & RCGP guidance page
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsAddPresModalOpen(false);
+                    setPresConditionInput('');
+                  }}
+                  className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
+                  Condition or Presentation Name
+                </label>
+                <input
+                  type="text"
+                  value={presConditionInput}
+                  onChange={(e) => setPresConditionInput(e.target.value)}
+                  placeholder="e.g. Migraine, Endometriosis, Hypertension..."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/80 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && presConditionInput.trim() && !isLoading) {
+                      e.preventDefault();
+                      const val = presConditionInput.trim();
+                      setIsAddPresModalOpen(false);
+                      setPresConditionInput('');
+                      handleSend(`Add presentation on ${val}`, 'add_presentation');
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Suggested Conditions */}
+              <div>
+                <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Suggestions:
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {['Migraine', 'Endometriosis', 'Hypertension', 'Gout', 'Atopic Eczema', 'Type 2 Diabetes', 'Asthma'].map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => setPresConditionInput(sug)}
+                      className="text-[10px] px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition"
+                    >
+                      + {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddPresModalOpen(false);
+                    setPresConditionInput('');
+                  }}
+                  className="px-3 py-1.5 text-xs text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!presConditionInput.trim() || isLoading}
+                  onClick={() => {
+                    const val = presConditionInput.trim();
+                    setIsAddPresModalOpen(false);
+                    setPresConditionInput('');
+                    handleSend(`Add presentation on ${val}`, 'add_presentation');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-40 transition shadow-sm"
+                >
+                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  <span>Generate & Add</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
     </>
   );

@@ -11,6 +11,8 @@ import {
   ExternalLink,
   Trash2,
   FolderOpen,
+  Stethoscope,
+  Sparkles,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { createDocument, updateDocument } from '@/lib/api/documents';
@@ -111,18 +113,31 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
           </span>
         </div>
 
-        <button
-          onClick={handleCreateSubpage}
-          disabled={isCreating}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 transition shadow-xs"
-        >
-          {isCreating ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <Plus className="w-3 h-3" />
-          )}
-          <span>New Sub-page</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('notion:open_ai_presentation_modal'));
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-300/60 dark:border-purple-700/60 transition shadow-xs"
+            title="Use AI to generate a clinical presentation with NICE CKS guidance"
+          >
+            <Stethoscope className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <span>Add Presentation (AI)</span>
+          </button>
+
+          <button
+            onClick={handleCreateSubpage}
+            disabled={isCreating}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 transition shadow-xs"
+          >
+            {isCreating ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Plus className="w-3 h-3" />
+            )}
+            <span>New Sub-page</span>
+          </button>
+        </div>
       </div>
 
       {/* Loading state */}

@@ -114,7 +114,7 @@ export function AIInlineMenu({
   };
 
   const quickActions: { label: string; icon: any; action: AIAction; defaultPrompt: string }[] = [
-    { label: 'Add Clinical Presentation', icon: Stethoscope, action: 'add_presentation' as any, defaultPrompt: 'Add clinical presentation on ' },
+    { label: 'Add Clinical Presentation', icon: Stethoscope, action: 'add_presentation', defaultPrompt: 'Add clinical presentation on ' },
     { label: 'Draft an outline', icon: FileText, action: 'generate', defaultPrompt: 'Draft a structured outline with key sections and bullet points' },
     { label: 'Brainstorm ideas', icon: Lightbulb, action: 'generate', defaultPrompt: 'Brainstorm 5 innovative, actionable ideas' },
     { label: 'Continue writing', icon: PenTool, action: 'continue', defaultPrompt: '' },
@@ -176,7 +176,14 @@ export function AIInlineMenu({
               return (
                 <button
                   key={idx}
-                  onClick={() => handleAIRequest(item.action, item.defaultPrompt)}
+                  onClick={() => {
+                    if (item.action === 'add_presentation' || item.defaultPrompt.endsWith('on ')) {
+                      setPrompt(item.defaultPrompt);
+                      setTimeout(() => inputRef.current?.focus(), 50);
+                    } else {
+                      handleAIRequest(item.action, item.defaultPrompt);
+                    }
+                  }}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-purple-100 dark:hover:bg-purple-950/50 hover:text-purple-700 dark:hover:text-purple-300 border border-neutral-200/60 dark:border-neutral-700/60 transition"
                 >
                   <Icon className="w-3 h-3 text-purple-500" />

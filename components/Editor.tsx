@@ -313,8 +313,16 @@ export default function Editor({
       }
     };
 
+    const handleOpenPres = () => {
+      setIsSidecarOpen(true);
+    };
+
     window.addEventListener('keydown', handleGlobalShortcuts);
-    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+    window.addEventListener('notion:open_ai_presentation_modal', handleOpenPres);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalShortcuts);
+      window.removeEventListener('notion:open_ai_presentation_modal', handleOpenPres);
+    };
   }, []);
 
   // Keyboard navigation and spacebar trigger inside editor

@@ -9,7 +9,11 @@ export type AIAction =
   | 'translate'
   | 'eli5'
   | 'table'
-  | 'chat';
+  | 'chat'
+  | 'add_presentation'
+  | 'fix_grammar'
+  | 'doc_summarize'
+  | 'doc_notes';
 
 export interface AIPromptPayload {
   action: AIAction;
