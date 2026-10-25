@@ -16,9 +16,6 @@ const Editor = nextDynamic(() => import('@/components/Editor'), {
   ),
 });
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 export default function HomePage() {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
