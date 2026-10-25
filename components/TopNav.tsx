@@ -25,6 +25,7 @@ import {
   HelpCircle,
   CopyPlus,
   BookOpen,
+  ShieldAlert,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -52,6 +53,7 @@ interface TopNavProps {
   onToggleSmallText?: () => void;
   onManualSync?: () => void;
   onOpenEvidence?: () => void;
+  onOpenInteractions?: () => void;
 }
 
 export function TopNav({
@@ -76,6 +78,7 @@ export function TopNav({
   onToggleSmallText,
   onManualSync,
   onOpenEvidence,
+  onOpenInteractions,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -191,6 +194,18 @@ export function TopNav({
           >
             <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span className="hidden xs:inline">Evidence</span>
+          </button>
+        )}
+
+        {/* Stockley's Drug Interactions Checker */}
+        {onOpenInteractions && (
+          <button
+            onClick={onOpenInteractions}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200/60 dark:border-amber-800/60 transition shadow-xs"
+            title="Open Stockley's Drug Interactions Checker (Cmd+I)"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span className="hidden sm:inline">Interactions</span>
           </button>
         )}
 

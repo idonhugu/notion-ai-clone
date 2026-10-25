@@ -13,6 +13,7 @@ export type AIAction =
   | 'chat'
   | 'add_presentation'
   | 'clinical_evidence'
+  | 'stockleys_checker'
   | 'fix_grammar'
   | 'doc_summarize'
   | 'doc_notes';

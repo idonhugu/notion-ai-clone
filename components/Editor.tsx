@@ -18,6 +18,7 @@ import { KanbanBoard, KanbanCard } from './KanbanBoard';
 import { TaskProgressBar } from './TaskProgressBar';
 import { ShortcutsModal } from './ShortcutsModal';
 import { ClinicalEvidenceModal } from './ClinicalEvidenceModal';
+import { StockleysModal } from './StockleysModal';
 import { SubPagesList } from './SubPagesList';
 import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
@@ -57,6 +58,7 @@ export default function Editor({
   const [isSidecarOpen, setIsSidecarOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [isInteractionsOpen, setIsInteractionsOpen] = useState(false);
   const [selectedChatDoc, setSelectedChatDoc] = useState<AttachedFile | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
@@ -589,6 +591,11 @@ export default function Editor({
         setIsEvidenceOpen((prev) => !prev);
       }
 
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        setIsInteractionsOpen((prev) => !prev);
+      }
+
       if (isCmdOrCtrl && e.key === '/') {
         e.preventDefault();
         setIsShortcutsOpen((prev) => !prev);
@@ -603,13 +610,19 @@ export default function Editor({
       setIsEvidenceOpen(true);
     };
 
+    const handleOpenInteractions = () => {
+      setIsInteractionsOpen(true);
+    };
+
     window.addEventListener('keydown', handleGlobalShortcuts);
     window.addEventListener('notion:open_ai_presentation_modal', handleOpenPres);
     window.addEventListener('notion:open_evidence_modal', handleOpenEvidence);
+    window.addEventListener('notion:open_stockleys_modal', handleOpenInteractions);
     return () => {
       window.removeEventListener('keydown', handleGlobalShortcuts);
       window.removeEventListener('notion:open_ai_presentation_modal', handleOpenPres);
       window.removeEventListener('notion:open_evidence_modal', handleOpenEvidence);
+      window.removeEventListener('notion:open_stockleys_modal', handleOpenInteractions);
     };
   }, []);
 
@@ -943,6 +956,7 @@ export default function Editor({
         onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
         onManualSync={handleManualSync}
         onOpenEvidence={() => setIsEvidenceOpen(true)}
+        onOpenInteractions={() => setIsInteractionsOpen(true)}
       />
 
       {/* Cover Image banner */}
@@ -1147,6 +1161,7 @@ export default function Editor({
           onSelectDocument={setSelectedChatDoc}
           onInsertIntoPage={handleInsertAIMarkdown}
           onOpenEvidence={() => setIsEvidenceOpen(true)}
+          onOpenInteractions={() => setIsInteractionsOpen(true)}
         />
       </div>
 
@@ -1173,6 +1188,16 @@ export default function Editor({
       <ClinicalEvidenceModal
         isOpen={isEvidenceOpen}
         onClose={() => setIsEvidenceOpen(false)}
+        currentDocId={doc.id}
+        currentDocTitle={title}
+        currentDocContext={docMarkdown}
+        onInsertIntoPage={handleInsertAIMarkdown}
+      />
+
+      {/* Stockley's Drug Interactions Checker Modal */}
+      <StockleysModal
+        isOpen={isInteractionsOpen}
+        onClose={() => setIsInteractionsOpen(false)}
         currentDocId={doc.id}
         currentDocTitle={title}
         currentDocContext={docMarkdown}

@@ -25,6 +25,7 @@ import {
   ExternalLink,
   Stethoscope,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import { AttachedFile } from './DocumentAttachments';
 import { formatPresentationTitle } from '@/lib/titleFormatter';
@@ -47,6 +48,7 @@ interface AIChatSidecarProps {
   onSelectDocument?: (file: AttachedFile | null) => void;
   onInsertIntoPage: (markdown: string, options?: { mode?: 'auto' | 'replace' | 'insert' }) => void;
   onOpenEvidence?: () => void;
+  onOpenInteractions?: () => void;
 }
 
 function renderInlineSpans(text: string, onLinkClick: (href: string) => void) {
@@ -162,6 +164,7 @@ export function AIChatSidecar({
   onSelectDocument,
   onInsertIntoPage,
   onOpenEvidence,
+  onOpenInteractions,
 }: AIChatSidecarProps) {
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -411,6 +414,17 @@ export function AIChatSidecar({
               >
                 <BookOpen className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                 <span className="hidden sm:inline">Evidence</span>
+              </button>
+            )}
+
+            {onOpenInteractions && (
+              <button
+                onClick={onOpenInteractions}
+                title="Open Stockley's Drug Interactions Checker"
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200/80 dark:border-amber-800/80 transition shadow-xs"
+              >
+                <ShieldAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                <span className="hidden sm:inline">Interactions</span>
               </button>
             )}
 

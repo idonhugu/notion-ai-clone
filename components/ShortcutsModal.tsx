@@ -32,6 +32,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
       icon: Sparkles,
       iconColor: 'text-purple-600 dark:text-purple-400',
       items: [
+        { keys: ['Cmd', 'I'], desc: "Open Stockley's Drug Interactions Checker" },
         { keys: ['Cmd', 'E'], desc: 'Open Heidi Evidence Decision Support & Calculators' },
         { keys: ['Cmd', 'J'], desc: 'Open AI Copilot Chat sidecar' },
         { keys: ['Ask AI'], desc: 'Open AI formatting & drafting menu' },

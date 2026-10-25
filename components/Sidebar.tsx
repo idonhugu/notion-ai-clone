@@ -20,6 +20,7 @@ import {
   Archive,
   RefreshCw,
   BookOpen,
+  ShieldAlert,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -326,6 +327,24 @@ export function Sidebar({
           </div>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-semibold">
             Heidi
+          </span>
+        </button>
+
+        {/* Stockley's Drug Interactions Checker */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('notion:open_stockleys_modal'));
+            setIsMobileOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition font-medium"
+          title="Stockley's Drug Interactions Checker (Cmd+I)"
+        >
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Interactions Checker</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-semibold">
+            Stockley
           </span>
         </button>
 
