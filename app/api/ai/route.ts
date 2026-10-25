@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, generateText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromDataUrl } from '@/lib/documentParser';
+import { formatPresentationTitle } from '@/lib/titleFormatter';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
@@ -181,7 +182,7 @@ export async function POST(req: NextRequest) {
           .filter((s) => s.length >= 2 && !/^(page|subpage|note|notes|workspace|here|this|a|an|the)$/i.test(s));
       };
 
-      const extractedConditions = extractConditionNames(prompt || '');
+      const extractedConditions = extractConditionNames(prompt || '').map((c) => formatPresentationTitle(c));
 
       // Guard: If user clicked the button or sent an incomplete prompt without condition name
       if (extractedConditions.length === 0) {
@@ -321,6 +322,7 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
 
         for (const p of parsedList) {
           if (!p.title) continue;
+          p.title = formatPresentationTitle(p.title);
           const docId = crypto.randomUUID();
           const blocks = buildClinicalDocumentBlocks(p);
 
@@ -339,7 +341,7 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
             updated_at: new Date().toISOString(),
           });
 
-          // Automatically update parent index if it has letter headings
+          // Automatically update parent index in alphabetical order under letter headings
           try {
             const { data: parentDoc } = await supabase
               .from('documents')
@@ -364,17 +366,61 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
                 children: [],
               };
 
-              const letterHeadingIdx = parentDoc.content.findIndex(
+              let updatedBlocks = [...parentDoc.content];
+              const letterHeadingIdx = updatedBlocks.findIndex(
                 (b: any) =>
                   b.type === 'heading' &&
                   b.content?.[0]?.text?.trim().toUpperCase() === letter
               );
 
-              let updatedBlocks = [...parentDoc.content];
               if (letterHeadingIdx !== -1) {
-                updatedBlocks.splice(letterHeadingIdx + 1, 0, newLinkBlock);
+                // Letter heading exists: find where this letter section ends
+                let nextHeadingIdx = updatedBlocks.findIndex(
+                  (b: any, idx: number) => idx > letterHeadingIdx && b.type === 'heading'
+                );
+                if (nextHeadingIdx === -1) nextHeadingIdx = updatedBlocks.length;
+
+                // Find exact alphabetical insertion index within this section
+                let existingIdx = -1;
+                let insertIdx = nextHeadingIdx;
+
+                for (let i = letterHeadingIdx + 1; i < nextHeadingIdx; i++) {
+                  const block = updatedBlocks[i];
+                  const link = block.content?.find((c: any) => c.type === 'link');
+                  const blockTitle = (link?.content?.[0]?.text || block.content?.map((c: any) => c.text).join('') || '')
+                    .replace(/^[^\w\s]+/, '')
+                    .trim();
+
+                  if (!blockTitle) continue;
+
+                  if (blockTitle.toLowerCase() === p.title.toLowerCase()) {
+                    existingIdx = i;
+                    break;
+                  }
+
+                  if (p.title.localeCompare(blockTitle, undefined, { sensitivity: 'base' }) < 0) {
+                    insertIdx = i;
+                    break;
+                  }
+                }
+
+                if (existingIdx !== -1) {
+                  // Replace existing duplicate with new link
+                  updatedBlocks[existingIdx] = newLinkBlock;
+                } else {
+                  // Insert in strictly alphabetical position
+                  updatedBlocks.splice(insertIdx, 0, newLinkBlock);
+                }
               } else {
-                updatedBlocks.push({
+                // Letter heading does NOT exist: find alphabetical spot among existing letter headings
+                const nextAlphaHeadingIdx = updatedBlocks.findIndex(
+                  (b: any) =>
+                    b.type === 'heading' &&
+                    b.content?.[0]?.text &&
+                    b.content[0].text.trim().toUpperCase().localeCompare(letter) > 0
+                );
+
+                const newHeadingBlock = {
                   id: crypto.randomUUID(),
                   type: 'heading',
                   props: {
@@ -386,8 +432,15 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
                   },
                   content: [{ type: 'text', text: letter, styles: {} }],
                   children: [],
-                });
-                updatedBlocks.push(newLinkBlock);
+                };
+
+                if (nextAlphaHeadingIdx !== -1) {
+                  // Insert letter heading and link block right before the next alphabetical letter
+                  updatedBlocks.splice(nextAlphaHeadingIdx, 0, newHeadingBlock, newLinkBlock);
+                } else {
+                  // No letter comes after it, append to the end
+                  updatedBlocks.push(newHeadingBlock, newLinkBlock);
+                }
               }
 
               await supabase

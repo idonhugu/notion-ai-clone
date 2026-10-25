@@ -26,6 +26,7 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { AttachedFile } from './DocumentAttachments';
+import { formatPresentationTitle } from '@/lib/titleFormatter';
 
 interface ChatMessage {
   id: string;
@@ -708,7 +709,7 @@ export function AIChatSidecar({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && presConditionInput.trim() && !isLoading) {
                       e.preventDefault();
-                      const val = presConditionInput.trim();
+                      const val = formatPresentationTitle(presConditionInput.trim());
                       setIsAddPresModalOpen(false);
                       setPresConditionInput('');
                       handleSend(`Add presentation on ${val}`, 'add_presentation');
@@ -727,7 +728,7 @@ export function AIChatSidecar({
                     <button
                       key={sug}
                       type="button"
-                      onClick={() => setPresConditionInput(sug)}
+                      onClick={() => setPresConditionInput(formatPresentationTitle(sug))}
                       className="text-[10px] px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition"
                     >
                       + {sug}
@@ -751,7 +752,7 @@ export function AIChatSidecar({
                   type="button"
                   disabled={!presConditionInput.trim() || isLoading}
                   onClick={() => {
-                    const val = presConditionInput.trim();
+                    const val = formatPresentationTitle(presConditionInput.trim());
                     setIsAddPresModalOpen(false);
                     setPresConditionInput('');
                     handleSend(`Add presentation on ${val}`, 'add_presentation');
