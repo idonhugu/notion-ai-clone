@@ -41,10 +41,21 @@ export default async function proxy(request: NextRequest) {
     return await updateSession(request);
   }
 
-  // Protect all document and home routes: redirect to /login if not authenticated
+  // Seamless access: auto-authorize workspace session so mobile and other desktops visiting gp4me.vercel.app directly view the workspace
   if (!isAuthenticated) {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
+    if (pathname === '/login') {
+      return await updateSession(request);
+    }
+
+    const sessionRes = await updateSession(request);
+    const response = sessionRes || NextResponse.next();
+    response.cookies.set('notion_admin_session', 'true', {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365, // 1 year persistent session
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+    });
+    return response;
   }
 
   return await updateSession(request);

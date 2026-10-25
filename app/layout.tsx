@@ -4,6 +4,9 @@ import '@blocknote/mantine/style.css';
 import '@blocknote/core/fonts/inter.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "Laksha's WorkSpace",
   description:

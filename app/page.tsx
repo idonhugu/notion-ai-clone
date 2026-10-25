@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { WorkspaceLayout } from '@/components/WorkspaceLayout';
 import { Document } from '@/lib/types';
 import { fetchAllDocuments, DEFAULT_STARTER_DOC } from '@/lib/api/documents';
 import { Loader2 } from 'lucide-react';
 
-const Editor = dynamic(() => import('@/components/Editor'), {
+const Editor = nextDynamic(() => import('@/components/Editor'), {
   ssr: false,
   loading: () => (
     <div className="flex h-screen items-center justify-center bg-white dark:bg-[#191919]">
@@ -15,6 +15,9 @@ const Editor = dynamic(() => import('@/components/Editor'), {
     </div>
   ),
 });
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default function HomePage() {
   const [currentDoc, setCurrentDoc] = useState<Document | null>(null);
@@ -34,28 +37,29 @@ export default function HomePage() {
           return;
         }
 
-        // 1. Check if user previously opened a document on this device
-        let targetDoc: Document | null = null;
+        // Sort active docs by updated_at descending so the most recently edited work in the cloud is always first
+        const sorted = [...activeDocs].sort((a, b) => {
+          const timeA = new Date(a.updated_at || a.created_at).getTime();
+          const timeB = new Date(b.updated_at || b.created_at).getTime();
+          return timeB - timeA;
+        });
+
+        // If user actively navigated to a doc on this device within the last 15 minutes, keep it; otherwise open the freshest cloud doc
+        let targetDoc: Document = sorted[0];
         if (typeof window !== 'undefined') {
           const lastActiveId = localStorage.getItem('notion_last_active_doc');
-          if (lastActiveId) {
-            targetDoc = activeDocs.find((d) => d.id === lastActiveId) || null;
+          const lastActiveTime = localStorage.getItem('notion_last_active_time');
+          const isRecent = lastActiveTime && Date.now() - Number(lastActiveTime) < 15 * 60 * 1000;
+          if (isRecent && lastActiveId) {
+            const matched = activeDocs.find((d) => d.id === lastActiveId);
+            if (matched) targetDoc = matched;
           }
-        }
-
-        // 2. If no valid last active doc, pick the most recently edited document
-        if (!targetDoc) {
-          const sorted = [...activeDocs].sort((a, b) => {
-            const timeA = new Date(a.updated_at || a.created_at).getTime();
-            const timeB = new Date(b.updated_at || b.created_at).getTime();
-            return timeB - timeA;
-          });
-          targetDoc = sorted[0];
         }
 
         const chosen = targetDoc || activeDocs[0];
         if (typeof window !== 'undefined' && chosen?.id) {
           localStorage.setItem('notion_last_active_doc', chosen.id);
+          localStorage.setItem('notion_last_active_time', String(Date.now()));
         }
         setCurrentDoc(chosen);
       } catch (err) {

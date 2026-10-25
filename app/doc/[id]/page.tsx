@@ -1,15 +1,18 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { WorkspaceLayout } from '@/components/WorkspaceLayout';
 import { Document } from '@/lib/types';
 import { fetchDocumentById } from '@/lib/api/documents';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
-const Editor = dynamic(() => import('@/components/Editor'), {
+const Editor = nextDynamic(() => import('@/components/Editor'), {
   ssr: false,
   loading: () => (
     <div className="flex h-screen items-center justify-center bg-white dark:bg-[#191919]">
@@ -47,6 +50,7 @@ function DocumentContent() {
           setNotFound(false);
           if (typeof window !== 'undefined') {
             localStorage.setItem('notion_last_active_doc', docData.id);
+            localStorage.setItem('notion_last_active_time', String(Date.now()));
           }
         } else {
           setNotFound(true);
