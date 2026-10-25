@@ -49,8 +49,19 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
       fetchSubpages();
     }
 
+    const handleRefresh = (e: any) => {
+      if (!e?.detail?.parent_id || e?.detail?.parent_id === currentDocId) {
+        fetchSubpages();
+      }
+    };
+
+    window.addEventListener('notion:doc_created', handleRefresh);
+    window.addEventListener('notion:doc_updated', handleRefresh);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('notion:doc_created', handleRefresh);
+      window.removeEventListener('notion:doc_updated', handleRefresh);
     };
   }, [currentDocId]);
 

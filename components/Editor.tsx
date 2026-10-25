@@ -122,6 +122,29 @@ export default function Editor({
     }
   }, [editor]);
 
+  // Listen for live updates to this document (e.g. when AI automatically updates the index)
+  useEffect(() => {
+    const handleDocUpdatedEvent = async (e: any) => {
+      if (e?.detail?.id === doc.id) {
+        try {
+          const res = await fetch(`/api/documents/${doc.id}`, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.document?.content && editor) {
+              editor.replaceBlocks(editor.document, data.document.content);
+              analyzeDocument();
+            }
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('notion:doc_updated', handleDocUpdatedEvent);
+    return () => {
+      window.removeEventListener('notion:doc_updated', handleDocUpdatedEvent);
+    };
+  }, [doc.id, editor, analyzeDocument]);
+
   // Track selection changes for the floating action menu
   useEffect(() => {
     if (!editor) return;
@@ -332,6 +355,39 @@ export default function Editor({
   const handleInsertAIMarkdown = async (markdown: string) => {
     if (!editor) return;
     try {
+      // Check if markdown contains an active presentation link: [emoji] [Title](/doc/[id])
+      const match = markdown.match(/(?:([^\s\[\]]+)\s+)?\[([^\]]+)\]\((\/doc\/[a-f0-9\-]{36})\)/);
+      if (match) {
+        const icon = match[1] || '🩺';
+        const linkTitle = match[2];
+        const href = match[3];
+
+        const linkBlock: any = {
+          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : 'b-' + Date.now(),
+          type: 'paragraph',
+          props: { textColor: 'default', textAlignment: 'left', backgroundColor: 'default' },
+          content: [
+            { type: 'text', text: `${icon} `, styles: {} },
+            {
+              type: 'link',
+              href,
+              content: [{ type: 'text', text: linkTitle, styles: { underline: true } }],
+            },
+          ],
+          children: [],
+        };
+
+        const cursor = editor.getTextCursorPosition();
+        if (cursor?.block) {
+          editor.insertBlocks([linkBlock], cursor.block, 'after');
+        } else {
+          editor.insertBlocks([linkBlock], editor.document[editor.document.length - 1], 'after');
+        }
+        analyzeDocument();
+        saveDocument({ content: editor.document });
+        return;
+      }
+
       const parsedBlocks = await editor.tryParseMarkdownToBlocks(markdown);
       if (parsedBlocks && parsedBlocks.length > 0) {
         const cursor = editor.getTextCursorPosition();
@@ -512,6 +568,8 @@ export default function Editor({
                   isOpen={showInlineAI}
                   onClose={() => setShowInlineAI(false)}
                   onApply={handleInsertAIMarkdown}
+                  documentId={doc.id}
+                  documentTitle={title}
                   documentContext={`Document Title: ${title}\nContent Snippet: ${JSON.stringify(
                     editor?.document?.slice(0, 5) || []
                   )}`}
@@ -578,6 +636,7 @@ export default function Editor({
         <AIChatSidecar
           isOpen={isSidecarOpen}
           onClose={() => setIsSidecarOpen(false)}
+          documentId={doc.id}
           documentTitle={title}
           documentContent={docMarkdown}
           attachedFiles={attachments}

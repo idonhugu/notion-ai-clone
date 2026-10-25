@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, ArrowRight, X, Loader2, RotateCcw, Check, FileText, Lightbulb, PenTool, ListTodo } from 'lucide-react';
+import { Sparkles, ArrowRight, X, Loader2, RotateCcw, Check, FileText, Lightbulb, PenTool, ListTodo, Stethoscope } from 'lucide-react';
 import { AIAction } from '@/lib/types';
 
 interface AIInlineMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onApply: (markdown: string) => void;
+  documentId?: string;
+  documentTitle?: string;
   documentContext?: string;
 }
 
@@ -15,6 +17,8 @@ export function AIInlineMenu({
   isOpen,
   onClose,
   onApply,
+  documentId,
+  documentTitle,
   documentContext = '',
 }: AIInlineMenuProps) {
   const [prompt, setPrompt] = useState('');
@@ -46,6 +50,8 @@ export function AIInlineMenu({
           action,
           prompt: customPrompt || prompt,
           context: documentContext,
+          documentId,
+          documentTitle,
         }),
       });
 
@@ -67,6 +73,22 @@ export function AIInlineMenu({
         accumulated += chunk;
         setStreamedResponse(accumulated);
       }
+
+      if (accumulated && typeof window !== 'undefined') {
+        const docMatches = [...accumulated.matchAll(/\/doc\/([a-f0-9\-]{36})/g)];
+        if (docMatches.length > 0) {
+          for (const m of docMatches) {
+            window.dispatchEvent(
+              new CustomEvent('notion:doc_created', { detail: { id: m[1], parent_id: documentId } })
+            );
+          }
+          if (documentId) {
+            window.dispatchEvent(
+              new CustomEvent('notion:doc_updated', { detail: { id: documentId } })
+            );
+          }
+        }
+      }
     } catch (err: any) {
       console.error('AI Stream Error:', err);
       setError(err.message || 'Something went wrong while contacting Gemini AI.');
@@ -77,12 +99,22 @@ export function AIInlineMenu({
 
   const handleAccept = () => {
     if (streamedResponse) {
-      onApply(streamedResponse);
+      // If a clinical presentation was created, extract the clean active link line to insert
+      const match = streamedResponse.match(/(?:([^\s\[\]]+)\s+)?\[([^\]]+)\]\((\/doc\/[a-f0-9\-]{36})\)/);
+      if (match) {
+        const icon = match[1] || '🩺';
+        const title = match[2];
+        const href = match[3];
+        onApply(`${icon} [${title}](${href})`);
+      } else {
+        onApply(streamedResponse);
+      }
       onClose();
     }
   };
 
   const quickActions: { label: string; icon: any; action: AIAction; defaultPrompt: string }[] = [
+    { label: 'Add Clinical Presentation', icon: Stethoscope, action: 'add_presentation' as any, defaultPrompt: 'Add clinical presentation on ' },
     { label: 'Draft an outline', icon: FileText, action: 'generate', defaultPrompt: 'Draft a structured outline with key sections and bullet points' },
     { label: 'Brainstorm ideas', icon: Lightbulb, action: 'generate', defaultPrompt: 'Brainstorm 5 innovative, actionable ideas' },
     { label: 'Continue writing', icon: PenTool, action: 'continue', defaultPrompt: '' },

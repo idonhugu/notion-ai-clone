@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Send,
@@ -21,6 +22,8 @@ import {
   BookOpen,
   ChevronDown,
   Quote,
+  ExternalLink,
+  Stethoscope,
 } from 'lucide-react';
 import { AttachedFile } from './DocumentAttachments';
 
@@ -33,6 +36,7 @@ interface ChatMessage {
 interface AIChatSidecarProps {
   isOpen: boolean;
   onClose: () => void;
+  documentId?: string;
   documentTitle: string;
   documentContent: string;
   attachedFiles?: AttachedFile[];
@@ -44,6 +48,7 @@ interface AIChatSidecarProps {
 export function AIChatSidecar({
   isOpen,
   onClose,
+  documentId,
   documentTitle,
   documentContent,
   attachedFiles = [],
@@ -51,6 +56,7 @@ export function AIChatSidecar({
   onSelectDocument,
   onInsertIntoPage,
 }: AIChatSidecarProps) {
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -130,6 +136,8 @@ export function AIChatSidecar({
           action: customAction || 'chat',
           prompt: query,
           context: `Document Title: ${documentTitle}\n\nDocument Body:\n${documentContent}`,
+          documentId,
+          documentTitle,
           fileData: activeDoc ? activeDoc.url : undefined,
           fileName: activeDoc ? activeDoc.name : undefined,
           fileType: activeDoc ? activeDoc.type : undefined,
@@ -154,6 +162,23 @@ export function AIChatSidecar({
         setMessages((prev) =>
           prev.map((msg) => (msg.id === assistantMsgId ? { ...msg, content: accumulated } : msg))
         );
+      }
+
+      if (accumulated && typeof window !== 'undefined') {
+        const docMatches = [...accumulated.matchAll(/\/doc\/([a-f0-9\-]{36})/g)];
+        if (docMatches.length > 0) {
+          for (const m of docMatches) {
+            const createdId = m[1];
+            window.dispatchEvent(
+              new CustomEvent('notion:doc_created', { detail: { id: createdId, parent_id: documentId } })
+            );
+          }
+          if (documentId) {
+            window.dispatchEvent(
+              new CustomEvent('notion:doc_updated', { detail: { id: documentId } })
+            );
+          }
+        }
       }
     } catch (err: any) {
       setMessages((prev) =>
@@ -209,10 +234,10 @@ export function AIChatSidecar({
         },
       ]
     : [
+        { label: 'Add Presentation', action: 'add_presentation', icon: Stethoscope, query: 'Add presentation on ' },
         { label: 'Summarize page', action: 'summarize', icon: FileText, query: 'Summarize this page in 3 key takeaways' },
         { label: 'Action items', action: 'action_items', icon: ListTodo, query: 'Extract all action items and tasks from this document' },
         { label: 'Critique & gaps', action: 'chat', icon: Lightbulb, query: 'What is missing or unclear in this document? Give constructive feedback' },
-        { label: 'Explain like I’m 5', action: 'eli5', icon: HelpCircle, query: 'Explain the core idea of this note like I am 5 years old' },
       ];
 
   return (
@@ -379,6 +404,43 @@ export function AIChatSidecar({
                       Thinking...
                     </span>
                   )}</div>
+
+                  {/* Interactive Presentation Action Card if a subpage link is present */}
+                  {!isUser && msg.content && (() => {
+                    const match = msg.content.match(/(?:([^\s\[\]]+)\s+)?\[([^\]]+)\]\((\/doc\/[a-f0-9\-]{36})\)/);
+                    if (!match) return null;
+                    const presIcon = match[1] || '🩺';
+                    const presTitle = match[2];
+                    const presHref = match[3];
+
+                    return (
+                      <div className="mt-2.5 p-2 rounded-lg border border-purple-200 dark:border-purple-800/60 bg-white dark:bg-neutral-900 shadow-xs flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm">{presIcon}</span>
+                          <span className="font-semibold text-xs text-purple-950 dark:text-purple-200 truncate">
+                            {presTitle}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => router.push(presHref)}
+                            className="flex items-center gap-1 px-2 py-1 rounded bg-purple-600 text-white text-[10px] font-semibold hover:bg-purple-700 transition"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Open</span>
+                          </button>
+                          <button
+                            onClick={() => onInsertIntoPage(`${presIcon} [${presTitle}](${presHref})`)}
+                            className="flex items-center gap-1 px-2 py-1 rounded bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-semibold hover:bg-purple-100 transition"
+                            title="Insert active link into document"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Insert Link</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Assistant message action bar */}
                   {!isUser && msg.content && msg.id !== 'welcome' && (
