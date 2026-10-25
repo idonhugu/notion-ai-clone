@@ -26,7 +26,7 @@ import {
   InteractionSeverity,
   UK_BRAND_TO_GENERIC,
 } from '@/lib/stockleysInteractions';
-import { updateDocument } from '@/lib/api/documents';
+import { updateDocument, fetchDocumentById } from '@/lib/api/documents';
 
 interface StockleysModalProps {
   isOpen: boolean;
@@ -245,7 +245,8 @@ ${interaction.emisSnippet}
           children: [],
         };
 
-        const existingBlocks = Array.isArray(pearlsDoc.content) ? pearlsDoc.content : [];
+        const { document: fullPearlsDoc } = await fetchDocumentById(pearlsDoc.id);
+        const existingBlocks = Array.isArray(fullPearlsDoc?.content) ? fullPearlsDoc.content : [];
         await updateDocument(pearlsDoc.id, {
           content: [...existingBlocks, newBlock],
           updated_at: new Date().toISOString(),

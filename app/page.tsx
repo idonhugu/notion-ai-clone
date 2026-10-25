@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import nextDynamic from 'next/dynamic';
 import { WorkspaceLayout } from '@/components/WorkspaceLayout';
 import { Document } from '@/lib/types';
-import { fetchAllDocuments, DEFAULT_STARTER_DOC } from '@/lib/api/documents';
+import { fetchAllDocuments, fetchDocumentById, DEFAULT_STARTER_DOC } from '@/lib/api/documents';
 import { Loader2 } from 'lucide-react';
 
 const Editor = nextDynamic(() => import('@/components/Editor'), {
@@ -55,8 +55,23 @@ export default function HomePage() {
 
         const chosen = targetDoc || activeDocs[0];
         if (typeof window !== 'undefined' && chosen?.id) {
-          localStorage.setItem('notion_last_active_doc', chosen.id);
-          localStorage.setItem('notion_last_active_time', String(Date.now()));
+          try {
+            localStorage.setItem('notion_last_active_doc', chosen.id);
+            localStorage.setItem('notion_last_active_time', String(Date.now()));
+          } catch {}
+        }
+
+        // Fetch the full document with content from /api/documents/[id]
+        if (chosen?.id) {
+          try {
+            const { document: fullDoc } = await fetchDocumentById(chosen.id);
+            if (isMounted && fullDoc) {
+              setCurrentDoc(fullDoc);
+              return;
+            }
+          } catch (docErr) {
+            console.warn('Failed to fetch full doc, using metadata:', docErr);
+          }
         }
         setCurrentDoc(chosen);
       } catch (err) {

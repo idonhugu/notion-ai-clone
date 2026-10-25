@@ -63,6 +63,30 @@ export const DEFAULT_STARTER_DOC: Document = {
   ],
 };
 
+export function safeSetStorage(key: string, value: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`localStorage quota exceeded or error for "${key}":`, err);
+  }
+}
+
+export function toLightDoc(d: any): Partial<Document> & { id: string } {
+  return {
+    id: d.id,
+    user_id: d.user_id,
+    title: d.title || 'Untitled',
+    parent_id: d.parent_id || null,
+    is_favorite: !!d.is_favorite,
+    is_archived: !!d.is_archived,
+    icon: d.icon || '📄',
+    cover_image: d.cover_image || null,
+    created_at: d.created_at,
+    updated_at: d.updated_at,
+  };
+}
+
 export async function fetchAllDocuments(): Promise<Document[]> {
   try {
     const res = await fetch(`/api/documents?_t=${Date.now()}`, {
@@ -73,7 +97,10 @@ export async function fetchAllDocuments(): Promise<Document[]> {
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('notion_ai_docs', JSON.stringify(data));
+        // Cache lightweight metadata only, never multi-megabyte block content
+        // This keeps localStorage well under 60 KB, preventing mobile Safari quota errors
+        const lightList = data.map(toLightDoc);
+        safeSetStorage('notion_ai_docs', JSON.stringify(lightList));
       }
       return data;
     }
@@ -81,13 +108,22 @@ export async function fetchAllDocuments(): Promise<Document[]> {
     console.warn('Falling back to local cache for documents:', err);
   }
 
-  // Fallback to localStorage
+  // Fallback to localStorage only if network totally unreachable
   if (typeof window !== 'undefined') {
     const cached = localStorage.getItem('notion_ai_docs');
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        // Only return cache if it contains actual workspace documents (not stale single starter doc)
+        if (Array.isArray(parsed) && parsed.length > 1) return parsed;
+        if (
+          Array.isArray(parsed) &&
+          parsed.length === 1 &&
+          parsed[0].id !== DEFAULT_STARTER_DOC.id &&
+          !parsed[0].title?.toLowerCase().includes('welcome')
+        ) {
+          return parsed;
+        }
       } catch {}
     }
   }
@@ -107,7 +143,7 @@ export async function fetchDocumentById(
       const data = await res.json();
       if (data?.document) {
         if (typeof window !== 'undefined') {
-          localStorage.setItem(`doc_${id}`, JSON.stringify(data.document));
+          safeSetStorage(`doc_${id}`, JSON.stringify(data.document));
         }
         return {
           document: data.document,
@@ -160,14 +196,14 @@ export async function createDocument(
       const doc = await res.json();
       if (doc?.id) {
         if (typeof window !== 'undefined') {
-          localStorage.setItem(`doc_${doc.id}`, JSON.stringify(doc));
+          safeSetStorage(`doc_${doc.id}`, JSON.stringify(doc));
 
           const cachedList = localStorage.getItem('notion_ai_docs');
           if (cachedList) {
             try {
               const list: Document[] = JSON.parse(cachedList);
               if (!list.some((d) => d.id === doc.id)) {
-                localStorage.setItem('notion_ai_docs', JSON.stringify([...list, doc]));
+                safeSetStorage('notion_ai_docs', JSON.stringify([...list.map(toLightDoc), toLightDoc(doc)]));
               }
             } catch {}
           }
@@ -201,13 +237,13 @@ export async function createDocument(
   };
 
   if (typeof window !== 'undefined') {
-    localStorage.setItem(`doc_${localId}`, JSON.stringify(fallback));
+    safeSetStorage(`doc_${localId}`, JSON.stringify(fallback));
 
     const cachedList = localStorage.getItem('notion_ai_docs');
     if (cachedList) {
       try {
         const list: Document[] = JSON.parse(cachedList);
-        localStorage.setItem('notion_ai_docs', JSON.stringify([...list, fallback]));
+        safeSetStorage('notion_ai_docs', JSON.stringify([...list.map(toLightDoc), toLightDoc(fallback)]));
       } catch {}
     }
 
@@ -233,7 +269,7 @@ export async function updateDocument(
     if (res.ok) {
       const updated = await res.json();
       if (typeof window !== 'undefined') {
-        localStorage.setItem(`doc_${id}`, JSON.stringify(updated));
+        safeSetStorage(`doc_${id}`, JSON.stringify(updated));
 
         const cachedList = localStorage.getItem('notion_ai_docs');
         if (cachedList) {
@@ -241,8 +277,8 @@ export async function updateDocument(
             const list: Document[] = JSON.parse(cachedList);
             const idx = list.findIndex((d) => d.id === id);
             if (idx !== -1) {
-              list[idx] = { ...list[idx], ...updated };
-              localStorage.setItem('notion_ai_docs', JSON.stringify(list));
+              list[idx] = { ...list[idx], ...toLightDoc(updated) };
+              safeSetStorage('notion_ai_docs', JSON.stringify(list.map(toLightDoc)));
             }
           } catch {}
         }
@@ -265,7 +301,7 @@ export async function updateDocument(
     if (cached) {
       try {
         const doc = { ...JSON.parse(cached), ...payload, updated_at: new Date().toISOString() };
-        localStorage.setItem(`doc_${id}`, JSON.stringify(doc));
+        safeSetStorage(`doc_${id}`, JSON.stringify(doc));
 
         const cachedList = localStorage.getItem('notion_ai_docs');
         if (cachedList) {
@@ -273,8 +309,8 @@ export async function updateDocument(
             const list: Document[] = JSON.parse(cachedList);
             const idx = list.findIndex((d) => d.id === id);
             if (idx !== -1) {
-              list[idx] = { ...list[idx], ...doc };
-              localStorage.setItem('notion_ai_docs', JSON.stringify(list));
+              list[idx] = { ...list[idx], ...toLightDoc(doc) };
+              safeSetStorage('notion_ai_docs', JSON.stringify(list.map(toLightDoc)));
             }
           } catch {}
         }
@@ -312,7 +348,7 @@ export async function deleteDocument(
           const updatedList = permanent
             ? list.filter((d) => d.id !== id)
             : list.map((d) => (d.id === id ? { ...d, is_archived: true } : d));
-          localStorage.setItem('notion_ai_docs', JSON.stringify(updatedList));
+          safeSetStorage('notion_ai_docs', JSON.stringify(updatedList.map(toLightDoc)));
         } catch {}
       }
 

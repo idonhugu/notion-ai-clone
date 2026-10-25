@@ -299,6 +299,11 @@ export function Sidebar({
         <button
           onClick={() => {
             setIsSyncing(true);
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.removeItem('notion_ai_docs');
+              } catch {}
+            }
             window.dispatchEvent(new CustomEvent('notion:sync_requested'));
             setTimeout(() => setIsSyncing(false), 800);
           }}

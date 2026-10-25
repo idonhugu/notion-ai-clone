@@ -25,7 +25,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { CLINICAL_CALCULATORS, ClinicalCalculator } from '@/lib/clinicalCalculators';
-import { updateDocument } from '@/lib/api/documents';
+import { updateDocument, fetchDocumentById } from '@/lib/api/documents';
 
 interface ClinicalEvidenceModalProps {
   isOpen: boolean;
@@ -174,6 +174,7 @@ export function ClinicalEvidenceModal({
       );
 
       if (pearlsDoc) {
+        const { document: fullPearlsDoc } = await fetchDocumentById(pearlsDoc.id);
         const summaryMatch = streamedEvidence.match(/### 🎯 Executive Clinical Recommendation\s+([^\n#]+)/);
         const pearlText = summaryMatch
           ? summaryMatch[1].trim()
@@ -190,7 +191,7 @@ export function ClinicalEvidenceModal({
           children: [],
         };
 
-        const existingBlocks = Array.isArray(pearlsDoc.content) ? pearlsDoc.content : [];
+        const existingBlocks = Array.isArray(fullPearlsDoc?.content) ? fullPearlsDoc.content : [];
         await updateDocument(pearlsDoc.id, {
           content: [...existingBlocks, newBlock],
           updated_at: new Date().toISOString(),

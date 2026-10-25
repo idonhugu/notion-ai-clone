@@ -10,6 +10,8 @@ import {
   updateDocument,
   deleteDocument,
   DEFAULT_STARTER_DOC,
+  safeSetStorage,
+  toLightDoc,
 } from '@/lib/api/documents';
 
 interface WorkspaceLayoutProps {
@@ -157,9 +159,7 @@ export function WorkspaceLayout({
   const handleDocumentCreated = (newDoc: Document) => {
     setDocuments((prev) => {
       const updated = [...prev.filter((d) => d.id !== newDoc.id), newDoc];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
-      }
+      safeSetStorage('notion_ai_docs', JSON.stringify(updated.map(toLightDoc)));
       return updated;
     });
   };
@@ -170,9 +170,7 @@ export function WorkspaceLayout({
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: true } : d));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
-      }
+      safeSetStorage('notion_ai_docs', JSON.stringify(updated.map(toLightDoc)));
       return updated;
     });
 
@@ -187,9 +185,7 @@ export function WorkspaceLayout({
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_archived: false } : d));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
-      }
+      safeSetStorage('notion_ai_docs', JSON.stringify(updated.map(toLightDoc)));
       return updated;
     });
   };
@@ -200,9 +196,7 @@ export function WorkspaceLayout({
 
     setDocuments((prev) => {
       const updated = prev.filter((d) => d.id !== id);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
-      }
+      safeSetStorage('notion_ai_docs', JSON.stringify(updated.map(toLightDoc)));
       return updated;
     });
   };
@@ -213,9 +207,7 @@ export function WorkspaceLayout({
 
     setDocuments((prev) => {
       const updated = prev.map((d) => (d.id === id ? { ...d, is_favorite: isFav } : d));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('notion_ai_docs', JSON.stringify(updated));
-      }
+      safeSetStorage('notion_ai_docs', JSON.stringify(updated.map(toLightDoc)));
       return updated;
     });
   };
