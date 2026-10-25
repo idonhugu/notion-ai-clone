@@ -12,19 +12,16 @@ export default function LoginPage() {
 
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performLogin = (u = username, p = password) => {
     setLoading(true);
     setMessage(null);
 
-    const trimmedUser = username.trim().toLowerCase();
-    const trimmedPass = password.trim();
+    const trimmedUser = u.trim().toLowerCase();
+    const trimmedPass = p.trim();
 
-    // Check for admin credentials: laksha / 1202
     if (trimmedUser === 'laksha' && trimmedPass === '1202') {
-      // Set secure authentication cookie (30 days)
       const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-      document.cookie = `notion_admin_session=true; path=/; max-age=2592000; SameSite=Lax${
+      document.cookie = `notion_admin_session=true; path=/; max-age=31536000; SameSite=Lax${
         isHttps ? '; Secure' : ''
       }`;
 
@@ -41,18 +38,17 @@ export default function LoginPage() {
       }
 
       setMessage({
-        text: 'Access granted. Welcome back, Admin Laksha!',
+        text: 'Access granted. Welcome back, Laksha!',
         type: 'success',
       });
 
       setTimeout(() => {
         router.push('/');
         router.refresh();
-      }, 500);
+      }, 300);
       return;
     }
 
-    // Invalid credentials
     setTimeout(() => {
       setMessage({
         text: 'Invalid username or password. Hint: laksha / 1202',
@@ -62,9 +58,15 @@ export default function LoginPage() {
     }, 400);
   };
 
-  const handleQuickFill = () => {
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    performLogin();
+  };
+
+  const handleInstantSignIn = () => {
     setUsername('laksha');
     setPassword('1202');
+    performLogin('laksha', '1202');
   };
 
   return (
@@ -158,16 +160,20 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Quick Fill Helper */}
-        <div className="mt-6 pt-5 border-t border-neutral-100 dark:border-neutral-800 text-center">
+        {/* One-Tap Sign In Helper for Mobile & Desktop */}
+        <div className="mt-6 pt-5 border-t border-neutral-100 dark:border-neutral-800 text-center space-y-2">
           <button
             type="button"
-            onClick={handleQuickFill}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 text-xs font-medium transition"
+            onClick={handleInstantSignIn}
+            disabled={loading}
+            className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer"
           >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>Auto-fill: <strong>laksha</strong> / <strong>1202</strong></span>
+            <ShieldCheck className="w-4 h-4" />
+            <span>1-Tap Instant Access as Laksha</span>
           </button>
+          <p className="text-[10px] text-neutral-400">
+            Or login with credentials: <strong>laksha</strong> / <strong>1202</strong>
+          </p>
         </div>
       </div>
     </div>

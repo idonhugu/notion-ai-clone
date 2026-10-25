@@ -15,7 +15,23 @@ export default async function proxy(request: NextRequest) {
   }
 
   const adminCookie = request.cookies.get('notion_admin_session');
-  const isAuthenticated = adminCookie?.value === 'true';
+  let isAuthenticated = adminCookie?.value === 'true';
+
+  // Allow URL-based instant access token for seamless mobile bookmarking
+  const autoAuthKey = request.nextUrl.searchParams.get('auth') || request.nextUrl.searchParams.get('key');
+  if (autoAuthKey === 'laksha' || autoAuthKey === '1202') {
+    const cleanUrl = new URL(request.url);
+    cleanUrl.searchParams.delete('auth');
+    cleanUrl.searchParams.delete('key');
+    const response = NextResponse.redirect(cleanUrl);
+    response.cookies.set('notion_admin_session', 'true', {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365, // 1 year persistent session
+      sameSite: 'lax',
+      secure: request.nextUrl.protocol === 'https:',
+    });
+    return response;
+  }
 
   // If visiting /login and already logged in, redirect to home
   if (pathname === '/login') {

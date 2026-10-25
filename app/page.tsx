@@ -28,7 +28,36 @@ export default function HomePage() {
         const docs = await fetchAllDocuments();
         if (!isMounted) return;
         const activeDocs = docs.filter((d) => !d.is_archived);
-        setCurrentDoc(activeDocs.length > 0 ? activeDocs[0] : DEFAULT_STARTER_DOC);
+
+        if (activeDocs.length === 0) {
+          setCurrentDoc(DEFAULT_STARTER_DOC);
+          return;
+        }
+
+        // 1. Check if user previously opened a document on this device
+        let targetDoc: Document | null = null;
+        if (typeof window !== 'undefined') {
+          const lastActiveId = localStorage.getItem('notion_last_active_doc');
+          if (lastActiveId) {
+            targetDoc = activeDocs.find((d) => d.id === lastActiveId) || null;
+          }
+        }
+
+        // 2. If no valid last active doc, pick the most recently edited document
+        if (!targetDoc) {
+          const sorted = [...activeDocs].sort((a, b) => {
+            const timeA = new Date(a.updated_at || a.created_at).getTime();
+            const timeB = new Date(b.updated_at || b.created_at).getTime();
+            return timeB - timeA;
+          });
+          targetDoc = sorted[0];
+        }
+
+        const chosen = targetDoc || activeDocs[0];
+        if (typeof window !== 'undefined' && chosen?.id) {
+          localStorage.setItem('notion_last_active_doc', chosen.id);
+        }
+        setCurrentDoc(chosen);
       } catch (err) {
         console.error('Fetch home doc error:', err);
         if (isMounted) setCurrentDoc(DEFAULT_STARTER_DOC);

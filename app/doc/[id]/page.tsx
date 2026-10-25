@@ -45,6 +45,9 @@ function DocumentContent() {
           setDocument(docData);
           setParentDocument(parentData);
           setNotFound(false);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('notion_last_active_doc', docData.id);
+          }
         } else {
           setNotFound(true);
         }

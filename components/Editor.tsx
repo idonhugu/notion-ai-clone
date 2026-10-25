@@ -160,10 +160,23 @@ export default function Editor({
 
   // Listen for live updates to this document & auto-resync when returning to tab/app on mobile
   useEffect(() => {
+    const isUserInteracting = () => {
+      if (saveTimeoutRef.current !== null) return true;
+      if (typeof document === 'undefined') return false;
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return false;
+      return (
+        active.closest('.bn-editor') !== null ||
+        active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        active.isContentEditable ||
+        active === titleInputRef.current
+      );
+    };
+
     const fetchLatestDoc = async () => {
       // Never overwrite editor while user is actively typing or has unsaved edits
-      if (saveTimeoutRef.current !== null) return;
-      if (typeof document !== 'undefined' && document.activeElement?.closest?.('.bn-editor')) return;
+      if (isUserInteracting()) return;
 
       try {
         const res = await fetch(`/api/documents/${doc.id}?_t=${Date.now()}`, {
@@ -174,8 +187,7 @@ export default function Editor({
           const data = await res.json();
           if (data?.document && editor) {
             // Check again in case user started typing while fetch was in-flight
-            if (saveTimeoutRef.current !== null) return;
-            if (typeof document !== 'undefined' && document.activeElement?.closest?.('.bn-editor')) return;
+            if (isUserInteracting()) return;
 
             const remoteDoc = data.document;
             if (remoteDoc.title && remoteDoc.title !== title) setTitle(remoteDoc.title);
@@ -200,8 +212,8 @@ export default function Editor({
 
     const handleDocUpdatedEvent = async (e: any) => {
       if (e?.detail?.id === doc.id) {
-        if (saveTimeoutRef.current !== null) return;
-        if (typeof document !== 'undefined' && document.activeElement?.closest?.('.bn-editor')) return;
+        if (e?.detail?._source === 'local_editor') return;
+        if (isUserInteracting()) return;
 
         if (
           e.detail?.content &&
@@ -588,7 +600,7 @@ export default function Editor({
     };
   }, []);
 
-  // Keyboard navigation and spacebar trigger inside editor
+  // Keyboard navigation inside editor
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!editor) return;
 
@@ -600,25 +612,6 @@ export default function Editor({
       !target?.closest?.('.bn-editor')
     ) {
       return;
-    }
-
-    if (e.key === ' ') {
-      try {
-        const cursor = editor.getTextCursorPosition();
-        const currentBlock = cursor?.block;
-        const isEmpty =
-          !currentBlock?.content ||
-          (Array.isArray(currentBlock.content) && currentBlock.content.length === 0) ||
-          (Array.isArray(currentBlock.content) &&
-            currentBlock.content.every((c: any) => !c.text || c.text.trim() === ''));
-
-        if (isEmpty) {
-          e.preventDefault();
-          setShowInlineAI(true);
-        }
-      } catch (err) {
-        // ignore cursor read error
-      }
     }
   };
 
@@ -977,7 +970,7 @@ export default function Editor({
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(
                   new CustomEvent('notion:doc_updated', {
-                    detail: { id: doc.id, title: newTitle },
+                    detail: { id: doc.id, title: newTitle, _source: 'local_editor' },
                   })
                 );
               }
