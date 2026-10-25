@@ -23,7 +23,10 @@ export default function LoginPage() {
     // Check for admin credentials: laksha / 1202
     if (trimmedUser === 'laksha' && trimmedPass === '1202') {
       // Set secure authentication cookie (30 days)
-      document.cookie = 'notion_admin_session=true; path=/; max-age=2592000; SameSite=Lax';
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      document.cookie = `notion_admin_session=true; path=/; max-age=2592000; SameSite=Lax${
+        isHttps ? '; Secure' : ''
+      }`;
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(
