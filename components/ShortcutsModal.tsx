@@ -28,11 +28,11 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
 
   const sections = [
     {
-      title: 'Notion AI Superpowers',
+      title: "Laksha's AI Superpowers",
       icon: Sparkles,
       iconColor: 'text-purple-600 dark:text-purple-400',
       items: [
-        { keys: ['Space'], desc: 'Open Notion AI on an empty line' },
+        { keys: ['Space'], desc: 'Open AI on an empty line' },
         { keys: ['Cmd', 'J'], desc: 'Open AI Copilot Chat sidecar' },
         { keys: ['Select text'], desc: 'Trigger AI rewrite, summarize, or translate' },
       ],
@@ -139,7 +139,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
             Press <kbd className="px-1 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-[10px]">Esc</kbd> to close
           </span>
           <span className="flex items-center gap-1">
-            <span>Powered by Notion AI</span>
+            <span>Laksha&apos;s WorkSpace</span>
             <Sparkles className="w-3 h-3 text-purple-500" />
           </span>
         </div>

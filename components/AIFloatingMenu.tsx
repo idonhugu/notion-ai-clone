@@ -395,7 +395,7 @@ export function AIFloatingMenu({
           <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-neutral-100 dark:border-neutral-800">
             <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{isLoading ? 'Notion AI Writing...' : 'AI Revision'}</span>
+              <span>{isLoading ? "Laksha's AI Writing..." : 'AI Revision'}</span>
             </span>
             <button
               onClick={onClose}

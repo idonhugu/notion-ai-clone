@@ -171,7 +171,7 @@ export function TopNav({
               ? 'bg-purple-600 text-white shadow-purple-500/20 shadow-md'
               : 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60'
           }`}
-          title="Open Notion AI Copilot"
+          title="Open Laksha's AI Copilot"
         >
           <Sparkles className={`w-3.5 h-3.5 ${isSidecarOpen ? 'text-white' : 'text-purple-600 dark:text-purple-400 animate-pulse'}`} />
           <span>Ask AI</span>

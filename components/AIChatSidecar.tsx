@@ -164,7 +164,7 @@ export function AIChatSidecar({
     {
       id: 'welcome',
       role: 'assistant',
-      content: `👋 Hi Laksha! I'm your Notion AI Copilot. I'm connected to **"${
+      content: `👋 Hi Laksha! I'm your AI Copilot for Laksha's WorkSpace. I'm connected to **"${
         documentTitle || 'Untitled'
       }"** and your attached documents.\n\nAsk me anything about this page or its PDFs, or pick a prompt below!`,
     },
@@ -370,7 +370,7 @@ export function AIChatSidecar({
             </div>
             <div>
               <div className="font-semibold text-xs text-neutral-800 dark:text-neutral-100 flex items-center gap-1.5">
-                <span>Notion AI Copilot</span>
+                <span>Laksha&apos;s AI Copilot</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
               <div className="text-[10px] text-neutral-400 truncate max-w-[170px]">

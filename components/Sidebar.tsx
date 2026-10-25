@@ -249,10 +249,10 @@ export function Sidebar({
       <div className="flex items-center justify-between p-3.5 border-b border-neutral-200/60 dark:border-neutral-800">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-            N
+            L
           </div>
           <span className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
-            Notion AI
+            Laksha&apos;s WorkSpace
           </span>
           <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
             Gemini
@@ -382,7 +382,7 @@ export function Sidebar({
               Admin
             </span>
           </div>
-          <div className="text-[10px] text-neutral-400">Notion AI Workspace</div>
+          <div className="text-[10px] text-neutral-400">Laksha&apos;s WorkSpace</div>
         </div>
         <button
           onClick={handleSignOut}

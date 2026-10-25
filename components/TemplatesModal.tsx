@@ -271,7 +271,7 @@ export const NOTION_TEMPLATES: Template[] = [
       {
         id: 'w-3',
         type: 'numberedListItem',
-        content: [{ type: 'text', text: 'Ship the Notion AI clone redesign with premium UI' }],
+        content: [{ type: 'text', text: "Ship the Laksha's WorkSpace redesign with premium UI" }],
       },
       {
         id: 'w-4',

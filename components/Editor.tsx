@@ -806,7 +806,7 @@ export default function Editor({
           )}
         </div>
 
-        {/* Dockable Notion AI Copilot Drawer ("Chat with your page & documents") */}
+        {/* Dockable Laksha's WorkSpace AI Copilot Drawer ("Chat with your page & documents") */}
         <AIChatSidecar
           isOpen={isSidecarOpen}
           onClose={() => setIsSidecarOpen(false)}

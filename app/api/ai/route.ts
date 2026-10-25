@@ -531,7 +531,7 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
 
     const attachedBundleText = attachedTextSnippets.join('\n\n');
 
-    let systemInstruction = `You are Notion AI, an expert, thoughtful, and highly capable writing assistant embedded inside an enterprise block-based document editor.
+    let systemInstruction = `You are Laksha's WorkSpace AI Copilot, an expert, thoughtful, and highly capable writing assistant embedded inside an enterprise block-based document editor.
 Always format your output in clean, crisp Markdown (using #, ##, ### for headings, bullet points -, numbered lists 1., checkboxes - [ ], blockquotes >, and code fences \`\`\` when appropriate).
 DO NOT wrap the entire answer in a top-level markdown code fence unless asked for raw code.
 DO NOT include conversational filler like "Here is your response:", "Sure, I can help with that", or "Let me know if you need anything else".
@@ -665,7 +665,7 @@ ${includeSources ? sourcesInstruction : ''}`;
         break;
 
       case 'chat':
-        systemInstruction = `You are Notion AI Copilot, an intelligent workspace sidecar assistant. You have full visibility into the author's active document and any attached files (including PDFs, docs, spreadsheets).
+        systemInstruction = `You are Laksha's WorkSpace AI Copilot, an intelligent workspace sidecar assistant. You have full visibility into the author's active document and any attached files (including PDFs, docs, spreadsheets).
 Use the provided document context and attached files to give insightful, accurate, and direct answers.
 When citing facts from attached documents, mention the document name.
 Format responses in clean Markdown with bolding, lists, and quotes.`;

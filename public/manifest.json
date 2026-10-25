@@ -1,6 +1,6 @@
 {
-  "name": "Notion AI",
-  "short_name": "Notion AI",
+  "name": "Laksha's WorkSpace",
+  "short_name": "Laksha's WorkSpace",
   "description": "Block-based workspace with Google Gemini 1.5 Flash AI and Supabase",
   "start_url": "/",
   "display": "standalone",

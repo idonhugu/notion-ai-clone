@@ -175,7 +175,7 @@ export function DocumentAIModal({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <h3 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-neutral-100 truncate">
-                  Notion AI Insights
+                  Laksha's AI Insights
                 </h3>
                 <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold uppercase">
                   Gemini Flash

@@ -185,7 +185,7 @@ export function DocumentAttachments({
             Attach PDFs, documents, or spreadsheets to this note
           </p>
           <p className="text-[11px] text-neutral-400 mt-0.5">
-            Use Notion AI to summarize, extract study notes, and reference in chat
+            Use Laksha's AI to summarize, extract study notes, and reference in chat
           </p>
         </div>
       )}

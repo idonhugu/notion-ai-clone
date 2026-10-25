@@ -5,14 +5,14 @@ import '@blocknote/core/fonts/inter.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
-  title: 'Notion AI - Connected Workspace & AI Assistant',
+  title: "Laksha's WorkSpace",
   description:
-    'A full-featured Notion clone powered by Next.js, Google Gemini, Supabase PostgreSQL, and BlockNote.',
+    "Laksha's WorkSpace - Connected workspace & AI clinical assistant powered by Next.js, Gemini Flash, and Supabase.",
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Notion AI',
+    title: "Laksha's WorkSpace",
   },
   formatDetection: {
     telephone: false,

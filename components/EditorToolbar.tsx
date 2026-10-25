@@ -391,7 +391,7 @@ export function EditorToolbar({
         type="button"
         onClick={onOpenAI}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100/80 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/80 transition shadow-2xs"
-        title="Ask Notion AI to write, edit, or format"
+        title="Ask Laksha's AI to write, edit, or format"
       >
         <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
         <span className="hidden sm:inline">Ask AI</span>

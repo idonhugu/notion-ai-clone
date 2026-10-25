@@ -7,7 +7,7 @@ const DEFAULT_KEY_B64 = 'c2Jfc2VjcmV0XzVLV0hGcVVJQ2JaLTBadTl5M2Q5RmdfVlVtSm1LVVk
 export const STARTER_DOC_PAYLOAD = {
   id: '06a072bf-5084-42c5-9c8d-008265f928e7',
   user_id: 'admin-user',
-  title: 'Welcome to Notion AI',
+  title: "Welcome to Laksha's WorkSpace",
   icon: '🚀',
   cover_image:
     'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1600&auto=format&fit=crop&q=80',
@@ -20,7 +20,7 @@ export const STARTER_DOC_PAYLOAD = {
       id: 'b-1',
       type: 'heading',
       props: { level: 1 },
-      content: [{ type: 'text', text: 'Welcome to your Notion AI Workspace' }],
+      content: [{ type: 'text', text: "Welcome to Laksha's WorkSpace" }],
     },
     {
       id: 'b-2',
@@ -42,13 +42,13 @@ export const STARTER_DOC_PAYLOAD = {
       id: 'b-4',
       type: 'checkListItem',
       props: { checked: true },
-      content: [{ type: 'text', text: 'Google Gemini 3.5 Flash streaming active' }],
+      content: [{ type: 'text', text: 'Google Gemini Flash streaming active' }],
     },
     {
       id: 'b-5',
       type: 'checkListItem',
       props: { checked: false },
-      content: [{ type: 'text', text: 'Press Space on an empty line to ask Notion AI' }],
+      content: [{ type: 'text', text: "Press Space on an empty line to ask Laksha's AI" }],
     },
     {
       id: 'b-6',
