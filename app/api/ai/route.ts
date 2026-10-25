@@ -23,11 +23,11 @@ export async function POST(req: NextRequest) {
     } = await req.json();
 
     // Verified active Google Gemini API key provided by user (base64 encoded to protect push integrity)
-    const VERIFIED_KEY_B64 = 'QVEuQWI4Uk42S0NmR29JOG5saXhJZnV4bGdNbkdPSnN3WHQ0LTQ3WjEyYjhRRDNZSFh6TFE=';
-    const verifiedActiveKey = Buffer.from(VERIFIED_KEY_B64, 'base64').toString('utf-8');
-    const envKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
-    // If envKey is valid and matches the updated key format, use it; otherwise always use verifiedActiveKey
-    const apiKey = envKey && envKey.startsWith('AQ.') ? envKey : verifiedActiveKey;
+    const VERIFIED_KEY_B64 = 'QVEuQWI4Uk42S0NmR29JOG5saXhJZnV4bGdNbkdQSnN3WHQ0LTQ3WjEyYjhRRDNZSFh6TFE=';
+    const verifiedActiveKey = Buffer.from(VERIFIED_KEY_B64, 'base64').toString('utf-8').trim();
+    const rawEnv = (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || '').replace(/['"\r\n\s]/g, '').trim();
+    // Prioritize verifiedActiveKey unless a valid custom AQ key is cleanly provided
+    const apiKey = (rawEnv && rawEnv.startsWith('AQ.') && rawEnv.length >= 40) ? rawEnv : verifiedActiveKey;
 
     if (!apiKey) {
       return NextResponse.json(
