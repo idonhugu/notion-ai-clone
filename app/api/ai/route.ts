@@ -677,11 +677,22 @@ When converting content into a checklist:
         }\n"""`;
         break;
 
-      case 'chat':
+      case 'chat': {
+        const isAddNoteRequest = /\b(add|add\s+in|include|note\s+down|insert|put\s+in|record)\b/i.test(prompt || '');
+
         systemInstruction = `You are Laksha's WorkSpace AI Copilot, an intelligent workspace sidecar assistant. You have full visibility into the author's active document and any attached files (including PDFs, docs, spreadsheets).
 Use the provided document context and attached files to give insightful, accurate, and direct answers.
 When citing facts from attached documents, mention the document name.
 Format responses in clean Markdown with bolding, lists, and quotes.
+
+CRITICAL INSTRUCTIONS FOR ADDING NOTES, LEARNING POINTS, OR CLINICAL PEARLS:
+If the user's request is to "add", "add in", "note down", "include", "insert", or provides notes/pearls to add to the page:
+- NEVER re-output, echo, or copy existing text or notes from the Active Document Context.
+- Output ONLY the newly requested notes/pearls as crisp, professional markdown bullet points (- Item).
+- If multiple distinct points or categories are mentioned (e.g. gynaecology, dermatology, prescribing), group them under clean markdown headings (e.g. "### 🚺 Women's Health & Gynaecology", "### 🧴 Dermatology", etc.) matching the document's structure.
+- Correct any medical spelling mistakes or colloquial names (e.g. "leoid scars" -> "Keloid scars", "kelocort" -> "Kelocote", "betacel palstaters" -> "Betacel plasters/patches", "slynd" -> "Slynd (Drospirenone)", "cocp" -> "COCP").
+- Bold key clinical terms and drugs so they stand out clearly.
+- DO NOT add conversational preamble ("Here are your notes to add:") or closing sign-offs. Deliver pure markdown ready to be inserted directly into the page via the "+ Insert to Page" button.
 
 CRITICAL FORMATTING INSTRUCTIONS FOR CONVERSIONS & FORMAT TRANSFORMATIONS:
 If the user asks to convert, change, format, or turn content into a checklist, to-do list, bullet list, table, or outline:
@@ -689,6 +700,7 @@ If the user asks to convert, change, format, or turn content into a checklist, t
 - DO NOT add conversational preambles like "Here is your document converted into an interactive checklist:" or "Sure! Here is your...".
 - DO NOT add conversational sign-offs or follow-up questions like "Would you like me to tailor this..." or "Let me know if you need anything else".
 - Maintain exact item content, capitalization, and phrasing so it cleanly replaces or updates the document canvas.`;
+
         userPrompt = `Active Document Context:
 """
 ${context || 'No document text yet.'}
@@ -698,8 +710,10 @@ ${attachedBundleText ? `Attached Files & Referenced Documents:\n${attachedBundle
 
 User Question/Request:
 "${prompt}"
+${isAddNoteRequest ? '\nNote: The user wants to ADD new notes/pearls to this document. Output ONLY the new bullet items to add (grouped by relevant category if applicable). Do NOT repeat any existing items from the document body above.' : ''}
 ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         break;
+      }
 
       default:
         userPrompt = prompt || selectedText || context || 'Help brainstorm ideas for this document.';

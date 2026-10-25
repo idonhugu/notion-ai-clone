@@ -761,12 +761,94 @@ export default function Editor({
           }
         }
       } else {
-        // Normal insert mode
-        const cursor = editor.getTextCursorPosition();
-        if (cursor?.block) {
-          editor.insertBlocks(parsedBlocks, cursor.block, 'after');
+        const incomingHeadings = parsedBlocks.filter((b: any) => b.type === 'heading');
+
+        if (incomingHeadings.length > 0 && mode === 'auto' && !isChecklistConversion) {
+          // Section-aware smart insertion: merge items under matching existing headings
+          const sections: { heading: any | null; items: any[] }[] = [];
+          let curSec: { heading: any | null; items: any[] } = { heading: null, items: [] };
+
+          for (const b of parsedBlocks) {
+            if (b.type === 'heading') {
+              if (curSec.heading || curSec.items.length > 0) {
+                sections.push(curSec);
+              }
+              curSec = { heading: b, items: [] };
+            } else {
+              curSec.items.push(b);
+            }
+          }
+          if (curSec.heading || curSec.items.length > 0) {
+            sections.push(curSec);
+          }
+
+          const normalizeText = (s: string) =>
+            s.replace(/^[^\w\s]+/, '').replace(/[^\w\s]/g, '').trim().toLowerCase();
+
+          for (const sec of sections) {
+            if (sec.heading && sec.items.length > 0) {
+              const hText = normalizeText(extractBlockText(sec.heading));
+              const existingHeadingIdx = editor.document.findIndex(
+                (b: any) => b.type === 'heading' && normalizeText(extractBlockText(b)) === hText
+              );
+
+              if (existingHeadingIdx !== -1) {
+                // Found matching section heading in page: find the end of this section
+                let insertAfterIdx = existingHeadingIdx;
+                for (let i = existingHeadingIdx + 1; i < editor.document.length; i++) {
+                  const b = editor.document[i];
+                  if (b.type === 'heading' || b.type === 'divider') {
+                    break;
+                  }
+                  insertAfterIdx = i;
+                }
+
+                // Filter out items already in this section to prevent duplicates
+                const existingTextsInSec = new Set<string>();
+                for (let i = existingHeadingIdx; i <= insertAfterIdx; i++) {
+                  const t = normalizeText(extractBlockText(editor.document[i]));
+                  if (t) existingTextsInSec.add(t);
+                }
+
+                const newItems = sec.items.filter(
+                  (item: any) => !existingTextsInSec.has(normalizeText(extractBlockText(item)))
+                );
+
+                if (newItems.length > 0) {
+                  editor.insertBlocks(newItems, editor.document[insertAfterIdx], 'after');
+                }
+                continue;
+              }
+            }
+
+            // If no matching heading, insert section blocks at cursor or end of document
+            const blocksToInsert = sec.heading ? [sec.heading, ...sec.items] : sec.items;
+            const cursor = editor.getTextCursorPosition();
+            if (cursor?.block) {
+              editor.insertBlocks(blocksToInsert, cursor.block, 'after');
+            } else {
+              editor.insertBlocks(blocksToInsert, editor.document[editor.document.length - 1], 'after');
+            }
+          }
         } else {
-          editor.insertBlocks(parsedBlocks, editor.document[editor.document.length - 1], 'after');
+          // Normal insert mode without matching headings
+          // Filter out any blocks that already exist verbatim in the document to prevent duplicate dumping
+          const existingDocTexts = new Set(
+            editor.document.map(extractBlockText).filter(Boolean).map((t: string) => t.toLowerCase())
+          );
+          const filteredBlocks = parsedBlocks.filter((b: any) => {
+            const t = extractBlockText(b).toLowerCase();
+            return !t || !existingDocTexts.has(t);
+          });
+
+          if (filteredBlocks.length > 0) {
+            const cursor = editor.getTextCursorPosition();
+            if (cursor?.block) {
+              editor.insertBlocks(filteredBlocks, cursor.block, 'after');
+            } else {
+              editor.insertBlocks(filteredBlocks, editor.document[editor.document.length - 1], 'after');
+            }
+          }
         }
       }
 
