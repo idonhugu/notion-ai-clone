@@ -148,8 +148,6 @@ export function PdfGuidelineModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   const handleFileChange = (file: File) => {
     if (!file) return;
     const lower = file.name.toLowerCase();
@@ -524,6 +522,8 @@ export function PdfGuidelineModal({
       setIsApplying(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">

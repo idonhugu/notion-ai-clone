@@ -100,8 +100,6 @@ export function AccurxModal({
     }
   }, [isOpen, currentDocTitle]);
 
-  if (!isOpen) return null;
-
   // Replace placeholders dynamically
   const substitutePlaceholders = (template: string): string => {
     return template
@@ -327,6 +325,8 @@ ${aiStreamedOutput}
       prompt: 'Recent blood test results reviewed and all completely normal. No action needed unless original symptoms persist.',
     },
   ];
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">

@@ -93,29 +93,59 @@ export function ClinicalToolsProvider({
     }
   }, [initialDocContext]);
 
+  // Cleanly close all modals to prevent overlapping backdrops
+  const closeAllModals = useCallback(() => {
+    setIsEvidenceOpen(false);
+    setIsInteractionsOpen(false);
+    setIsPdfGuidelineOpen(false);
+    setIsDermEvidenceOpen(false);
+    setIsAccurxOpen(false);
+    setIsShortcutsOpen(false);
+    setPreloadedPdfFile(null);
+  }, []);
+
   // Modal open / close handlers
-  const openEvidence = useCallback(() => setIsEvidenceOpen(true), []);
+  const openEvidence = useCallback(() => {
+    closeAllModals();
+    setIsEvidenceOpen(true);
+  }, [closeAllModals]);
   const closeEvidence = useCallback(() => setIsEvidenceOpen(false), []);
 
-  const openInteractions = useCallback(() => setIsInteractionsOpen(true), []);
+  const openInteractions = useCallback(() => {
+    closeAllModals();
+    setIsInteractionsOpen(true);
+  }, [closeAllModals]);
   const closeInteractions = useCallback(() => setIsInteractionsOpen(false), []);
 
-  const openPdfGuideline = useCallback((file?: AttachedFile | null) => {
-    setPreloadedPdfFile(file || null);
-    setIsPdfGuidelineOpen(true);
-  }, []);
+  const openPdfGuideline = useCallback(
+    (file?: AttachedFile | null) => {
+      closeAllModals();
+      setPreloadedPdfFile(file || null);
+      setIsPdfGuidelineOpen(true);
+    },
+    [closeAllModals]
+  );
   const closePdfGuideline = useCallback(() => {
     setIsPdfGuidelineOpen(false);
     setPreloadedPdfFile(null);
   }, []);
 
-  const openDermEvidence = useCallback(() => setIsDermEvidenceOpen(true), []);
+  const openDermEvidence = useCallback(() => {
+    closeAllModals();
+    setIsDermEvidenceOpen(true);
+  }, [closeAllModals]);
   const closeDermEvidence = useCallback(() => setIsDermEvidenceOpen(false), []);
 
-  const openAccurx = useCallback(() => setIsAccurxOpen(true), []);
+  const openAccurx = useCallback(() => {
+    closeAllModals();
+    setIsAccurxOpen(true);
+  }, [closeAllModals]);
   const closeAccurx = useCallback(() => setIsAccurxOpen(false), []);
 
-  const openShortcuts = useCallback(() => setIsShortcutsOpen(true), []);
+  const openShortcuts = useCallback(() => {
+    closeAllModals();
+    setIsShortcutsOpen(true);
+  }, [closeAllModals]);
   const closeShortcuts = useCallback(() => setIsShortcutsOpen(false), []);
 
   // Insert markdown into active editor page
@@ -136,40 +166,38 @@ export function ClinicalToolsProvider({
 
       if (isCmdOrCtrl && e.key.toLowerCase() === 'e') {
         e.preventDefault();
-        setIsEvidenceOpen((prev) => !prev);
+        openEvidence();
       } else if (isCmdOrCtrl && e.key.toLowerCase() === 'i') {
         e.preventDefault();
-        setIsInteractionsOpen((prev) => !prev);
+        openInteractions();
       } else if (isCmdOrCtrl && e.key.toLowerCase() === 'u') {
         e.preventDefault();
-        setPreloadedPdfFile(null);
-        setIsPdfGuidelineOpen((prev) => !prev);
+        openPdfGuideline(null);
       } else if (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        setIsDermEvidenceOpen((prev) => !prev);
+        openDermEvidence();
       } else if (
         isCmdOrCtrl &&
         e.shiftKey &&
         (e.key.toLowerCase() === 'a' || e.key.toLowerCase() === 's')
       ) {
         e.preventDefault();
-        setIsAccurxOpen((prev) => !prev);
+        openAccurx();
       } else if (isCmdOrCtrl && e.key === '/') {
         e.preventDefault();
-        setIsShortcutsOpen((prev) => !prev);
+        openShortcuts();
       }
     };
 
-    const handleOpenEvidenceEvent = () => setIsEvidenceOpen(true);
-    const handleOpenInteractionsEvent = () => setIsInteractionsOpen(true);
+    const handleOpenEvidenceEvent = () => openEvidence();
+    const handleOpenInteractionsEvent = () => openInteractions();
     const handleOpenPdfGuidelineEvent = (e: Event) => {
       const custom = e as CustomEvent<AttachedFile | undefined>;
-      setPreloadedPdfFile(custom?.detail || null);
-      setIsPdfGuidelineOpen(true);
+      openPdfGuideline(custom?.detail || null);
     };
-    const handleOpenDermEvent = () => setIsDermEvidenceOpen(true);
-    const handleOpenAccurxEvent = () => setIsAccurxOpen(true);
-    const handleOpenShortcutsEvent = () => setIsShortcutsOpen(true);
+    const handleOpenDermEvent = () => openDermEvidence();
+    const handleOpenAccurxEvent = () => openAccurx();
+    const handleOpenShortcutsEvent = () => openShortcuts();
 
     const handleActiveDocChanged = (e: Event) => {
       const custom = e as CustomEvent<ClinicalDocContext>;

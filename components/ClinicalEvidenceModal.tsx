@@ -119,8 +119,6 @@ export function ClinicalEvidenceModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   const handleSearchEvidence = async (searchQuery = query) => {
     if (!searchQuery.trim() || isLoading) return;
 
@@ -412,6 +410,8 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
       return topicMatch || queryMatch || pointsMatch || refMatch;
     });
   }, [savedLearnings, learningSearchQuery]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
