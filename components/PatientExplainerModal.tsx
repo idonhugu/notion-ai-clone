@@ -274,6 +274,10 @@ export function PatientExplainerModal({
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
                   Turn the Screen
                 </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80 hidden xs:inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Claude Opus 5.5
+                </span>
               </div>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-400 hidden sm:block">
                 Clear lay analogies and high-resolution anatomical diagrams to explain pathology in 30 seconds.
@@ -306,7 +310,7 @@ export function PatientExplainerModal({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Ask AI to Generate</span>
+                <span>Ask AI to Generate (Claude Opus)</span>
               </button>
             </div>
 
