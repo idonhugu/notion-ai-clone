@@ -29,6 +29,7 @@ import {
   Eye,
   MessageSquare,
   Smartphone,
+  Monitor,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -60,6 +61,7 @@ interface TopNavProps {
   onOpenPdfGuideline?: () => void;
   onOpenDermEvidence?: () => void;
   onOpenAccurx?: () => void;
+  onOpenPatientExplainer?: () => void;
 }
 
 export function TopNav({
@@ -88,6 +90,7 @@ export function TopNav({
   onOpenPdfGuideline,
   onOpenDermEvidence,
   onOpenAccurx,
+  onOpenPatientExplainer,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -258,6 +261,19 @@ export function TopNav({
           </button>
         )}
 
+        {/* Patient Visual Explainer ("Turn the Screen" Mode) */}
+        {onOpenPatientExplainer && (
+          <button
+            onClick={onOpenPatientExplainer}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 transition shadow-xs flex-shrink-0"
+            title="Turn Screen to Patient: High-Res Visual Explainer Mode (Cmd+Shift+P)"
+          >
+            <Monitor className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden sm:inline">Turn Screen</span>
+            <span className="inline sm:hidden text-[11px]">Show Patient</span>
+          </button>
+        )}
+
         {/* Shortcuts Cheat Sheet trigger */}
         {onOpenShortcuts && (
           <button
@@ -413,6 +429,25 @@ export function TopNav({
               <div className="px-1.5 py-1 text-[10px] uppercase font-bold text-neutral-400">
                 Clinical Tools
               </div>
+
+              {onOpenPatientExplainer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenPatientExplainer();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Monitor className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Turn Screen (Patient Mode)</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                    Patient
+                  </span>
+                </button>
+              )}
 
               {onOpenAccurx && (
                 <button
@@ -617,6 +652,16 @@ export function TopNav({
           >
             <Smartphone className="w-3 h-3 text-blue-600 dark:text-blue-400" />
             <span>Accurx SMS</span>
+          </button>
+        )}
+        {onOpenPatientExplainer && (
+          <button
+            type="button"
+            onClick={onOpenPatientExplainer}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <Monitor className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+            <span>Turn Screen</span>
           </button>
         )}
       </div>

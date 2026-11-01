@@ -59,6 +59,7 @@ export default function Editor({
     openPdfGuideline,
     openDermEvidence,
     openAccurx,
+    openPatientExplainer,
     openShortcuts,
     setActiveDocContext,
   } = useClinicalTools();
@@ -957,6 +958,7 @@ export default function Editor({
         onOpenPdfGuideline={() => openPdfGuideline()}
         onOpenDermEvidence={openDermEvidence}
         onOpenAccurx={openAccurx}
+        onOpenPatientExplainer={openPatientExplainer}
       />
 
       {/* Cover Image banner */}

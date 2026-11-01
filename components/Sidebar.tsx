@@ -24,6 +24,7 @@ import {
   Eye,
   Smartphone,
   MessageSquare,
+  Monitor,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -68,6 +69,7 @@ export function Sidebar({
     openPdfGuideline,
     openDermEvidence,
     openAccurx,
+    openPatientExplainer,
   } = useClinicalTools();
 
   // Listen for Cmd+K keyboard shortcut
@@ -422,6 +424,25 @@ export function Sidebar({
           </div>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-semibold">
             NHS PILs
+          </span>
+        </button>
+
+        {/* Patient Visual Explainer ("Turn the Screen" Mode) */}
+        <button
+          type="button"
+          onClick={() => {
+            openPatientExplainer();
+            setIsMobileOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition font-medium cursor-pointer"
+          title="Turn Screen to Patient: High-Res Visual Explainer Mode (Cmd+Shift+P)"
+        >
+          <div className="flex items-center gap-2">
+            <Monitor className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Patient Explainer</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-semibold">
+            Show Patient
           </span>
         </button>
 

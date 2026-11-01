@@ -15,6 +15,7 @@ import { StockleysModal } from './StockleysModal';
 import { PdfGuidelineModal } from './PdfGuidelineModal';
 import { DermEvidenceModal } from './DermEvidenceModal';
 import { AccurxModal } from './AccurxModal';
+import { PatientExplainerModal } from './PatientExplainerModal';
 import { ShortcutsModal } from './ShortcutsModal';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -31,6 +32,7 @@ interface ClinicalToolsContextValue {
   isPdfGuidelineOpen: boolean;
   isDermEvidenceOpen: boolean;
   isAccurxOpen: boolean;
+  isPatientExplainerOpen: boolean;
   isShortcutsOpen: boolean;
 
   // Triggers
@@ -44,6 +46,8 @@ interface ClinicalToolsContextValue {
   closeDermEvidence: () => void;
   openAccurx: () => void;
   closeAccurx: () => void;
+  openPatientExplainer: () => void;
+  closePatientExplainer: () => void;
   openShortcuts: () => void;
   closeShortcuts: () => void;
 
@@ -80,6 +84,7 @@ export function ClinicalToolsProvider({
   const [preloadedPdfFile, setPreloadedPdfFile] = useState<AttachedFile | null>(null);
   const [isDermEvidenceOpen, setIsDermEvidenceOpen] = useState(false);
   const [isAccurxOpen, setIsAccurxOpen] = useState(false);
+  const [isPatientExplainerOpen, setIsPatientExplainerOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   const [activeDocContext, setActiveDocContext] = useState<ClinicalDocContext>(
@@ -100,6 +105,7 @@ export function ClinicalToolsProvider({
     setIsPdfGuidelineOpen(false);
     setIsDermEvidenceOpen(false);
     setIsAccurxOpen(false);
+    setIsPatientExplainerOpen(false);
     setIsShortcutsOpen(false);
     setPreloadedPdfFile(null);
   }, []);
@@ -142,6 +148,12 @@ export function ClinicalToolsProvider({
   }, [closeAllModals]);
   const closeAccurx = useCallback(() => setIsAccurxOpen(false), []);
 
+  const openPatientExplainer = useCallback(() => {
+    closeAllModals();
+    setIsPatientExplainerOpen(true);
+  }, [closeAllModals]);
+  const closePatientExplainer = useCallback(() => setIsPatientExplainerOpen(false), []);
+
   const openShortcuts = useCallback(() => {
     closeAllModals();
     setIsShortcutsOpen(true);
@@ -183,6 +195,9 @@ export function ClinicalToolsProvider({
       ) {
         e.preventDefault();
         openAccurx();
+      } else if (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        openPatientExplainer();
       } else if (isCmdOrCtrl && e.key === '/') {
         e.preventDefault();
         openShortcuts();
@@ -197,6 +212,7 @@ export function ClinicalToolsProvider({
     };
     const handleOpenDermEvent = () => openDermEvidence();
     const handleOpenAccurxEvent = () => openAccurx();
+    const handleOpenPatientExplainerEvent = () => openPatientExplainer();
     const handleOpenShortcutsEvent = () => openShortcuts();
 
     const handleActiveDocChanged = (e: Event) => {
@@ -212,6 +228,7 @@ export function ClinicalToolsProvider({
     window.addEventListener('notion:open_pdf_guideline_modal', handleOpenPdfGuidelineEvent);
     window.addEventListener('notion:open_derm_evidence_modal', handleOpenDermEvent);
     window.addEventListener('notion:open_accurx_modal', handleOpenAccurxEvent);
+    window.addEventListener('notion:open_patient_explainer_modal', handleOpenPatientExplainerEvent);
     window.addEventListener('notion:open_shortcuts_modal', handleOpenShortcutsEvent);
     window.addEventListener('notion:active_doc_changed', handleActiveDocChanged);
 
@@ -222,10 +239,11 @@ export function ClinicalToolsProvider({
       window.removeEventListener('notion:open_pdf_guideline_modal', handleOpenPdfGuidelineEvent);
       window.removeEventListener('notion:open_derm_evidence_modal', handleOpenDermEvent);
       window.removeEventListener('notion:open_accurx_modal', handleOpenAccurxEvent);
+      window.removeEventListener('notion:open_patient_explainer_modal', handleOpenPatientExplainerEvent);
       window.removeEventListener('notion:open_shortcuts_modal', handleOpenShortcutsEvent);
       window.removeEventListener('notion:active_doc_changed', handleActiveDocChanged);
     };
-  }, []);
+  }, [openEvidence, openInteractions, openPdfGuideline, openDermEvidence, openAccurx, openPatientExplainer, openShortcuts]);
 
   // 2. Universal Native Link Click Capture
   // Guarantees all links (internal /doc/... or external https://...) are 100% clickable,
@@ -272,6 +290,7 @@ export function ClinicalToolsProvider({
         isPdfGuidelineOpen,
         isDermEvidenceOpen,
         isAccurxOpen,
+        isPatientExplainerOpen,
         isShortcutsOpen,
         openEvidence,
         closeEvidence,
@@ -283,6 +302,8 @@ export function ClinicalToolsProvider({
         closeDermEvidence,
         openAccurx,
         closeAccurx,
+        openPatientExplainer,
+        closePatientExplainer,
         openShortcuts,
         closeShortcuts,
         activeDocContext,
@@ -351,6 +372,18 @@ export function ClinicalToolsProvider({
         <AccurxModal
           isOpen={isAccurxOpen}
           onClose={closeAccurx}
+          currentDocId={activeDocContext.id}
+          currentDocTitle={activeDocContext.title}
+          currentDocContext={activeDocContext.contentMarkdown}
+          onInsertIntoPage={insertIntoActiveDoc}
+        />
+      </ErrorBoundary>
+
+      {/* Patient-Facing Visual Explainer Mode ("Turn the Screen") Modal */}
+      <ErrorBoundary fallbackTitle="Patient Visual Explainer Error">
+        <PatientExplainerModal
+          isOpen={isPatientExplainerOpen}
+          onClose={closePatientExplainer}
           currentDocId={activeDocContext.id}
           currentDocTitle={activeDocContext.title}
           currentDocContext={activeDocContext.contentMarkdown}

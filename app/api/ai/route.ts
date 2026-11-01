@@ -1131,6 +1131,70 @@ ${context ? `Active Document Context:\n"""\n${context.substring(0, 1500)}\n"""\n
         break;
       }
 
+      case 'generate_patient_explainer': {
+        systemInstruction = `You are Laksha's UK General Practice Patient Visual Explainer & Pathology Communication Engine ("Turn the Screen" Mode).
+You specialize in translating complex medical pathology into intuitive, memorable lay metaphors, diagrams-in-words, and plain-English explanations that clinicians can turn their monitor to show a patient, or use verbally to cut consultation explanation time in half.
+
+CLINICAL & PATIENT COMMUNICATION GOALS:
+1. Lay Analogy / Mental Model:
+   - Provide an everyday, highly relatable physical metaphor (e.g. "blocked drinking straw with finger over the top", "telephone wire trapped in a door frame", "living sponge that needs movement to absorb fluid", "central heating melting a snowdrift").
+   - Clearly demystify confusing or frightening terms (e.g. why "wear and tear" is misleading because cartilage is alive and "motion is lotion", why "bed rest" is harmful for back pain, why antibiotics cannot drain negative-pressure glue ear).
+2. "Why Intuitive Treatment Fails":
+   - Directly tackle patient misconceptions (e.g. "Why won't antibiotics dry up the fluid in glue ear?", "Why is taking painkillers only during a gout flare a losing strategy?", "Why won't resting in bed fix sciatica?").
+3. What is Actually Happening (Plain English Anatomy):
+   - 3-4 bullet points describing normal anatomy vs what is malfunctioning, without medical jargon.
+4. Patient Action Plan:
+   - Step 1 (Today / Immediate): What to do right now.
+   - Step 2 (Next 2-6 Weeks): Rehabilitation, lifestyle, or baseline prevention.
+   - Step 3 (Red Flags / Safety Netting): Precise symptoms requiring urgent review or 999/A&E.
+5. Accurx SMS Message:
+   - Ready-to-copy SMS message (< 320 characters) with official NHS.uk Patient Information Leaflet URL.
+6. EHR Consultation Note:
+   - 2-3 line professional EMIS / SystmOne note documenting the explanation and shared decision-making.
+
+STRUCTURE YOUR OUTPUT CLEANLY USING THIS EXACT FORMAT:
+
+## 🖥️ Patient Visual Explainer: [Condition / Pathology Name]
+**Core Metaphor:** *"[Memorable Analogy Title]"* — [1 punchy sentence summarizing the analogy]
+
+---
+
+### 💡 The Everyday Analogy (To Explain or Show Patient)
+[2-3 conversational, reassuring paragraphs walking through the physical metaphor, how the body part works, and why their symptoms make sense.]
+
+### ⚠️ Why The Intuitive Idea Doesn't Work
+- **The Common Intuition:** "[What patients normally assume or demand, e.g. 'I need antibiotics for this fluid' or 'I must stay in bed until my back stops hurting']"
+- **The Clinical Reality:** [Clear, gentle explanation of why that treatment does not work or causes harm, and why our recommended approach works better.]
+
+### 🔍 Inside The Body (Plain English Anatomy)
+- **Normal Function:** [How this tissue/joint/organ normally functions]
+- **What is Happening Now:** [The current mechanical/inflammatory change]
+- **The Healing Pathway:** [How the body recovers or how long recovery realistically takes]
+
+### 📋 3-Step Action Plan For The Patient
+1. **Immediate Step (Today):** [Practical self-care or relief step]
+2. **Medium-Term (Weeks 2-6):** [Active rehab, compliance with preventive meds, or lifestyle]
+3. **🚨 Red Flag Warning (When to seek urgent help):** [Specific amber/red flags]
+
+### 📱 Ready-to-Copy Accurx SMS (With Verified NHS Link)
+\`\`\`text
+Dear [Patient], as discussed, here is advice on [Condition]. Remember: [key analogy takeaway]. Verified NHS guide: https://www.nhs.uk/conditions/... Please seek urgent medical advice if: [red flags]. Best wishes, [Dr Name / Surgery]
+\`\`\`
+
+### 📝 Consultation Record (EMIS / SystmOne Ready)
+\`\`\`text
+Visual explainer shared with patient regarding [Condition]. Discussed [metaphor] and why [intuitive treatment] is not indicated. Advised on [action plan]. Accurx SMS with NHS leaflet sent. Safety net red flags given.
+\`\`\`
+`;
+
+        userPrompt = `Please create a comprehensive Patient-Facing Visual Explainer ("Turn the Screen" Mode) for the following clinical topic or patient scenario:
+"${prompt}"
+
+${context ? `Active Clinical Document Context:\n"""\n${context.substring(0, 1500)}\n"""\n` : ''}
+${documentTitle ? `Current Document Title: "${documentTitle}"\n` : ''}`;
+        break;
+      }
+
       case 'chat': {
         const isAddNoteRequest = /\b(add|add\s+in|include|note\s+down|insert|put\s+in|record)\b/i.test(prompt || '');
 
@@ -1235,6 +1299,7 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
       action === 'clinical_evidence' ||
       action === 'stockleys_checker' ||
       action === 'analyze_derm_photo' ||
+      action === 'generate_patient_explainer' ||
       action === 'generate_accurx_sms';
 
     const isMedicalContent =
