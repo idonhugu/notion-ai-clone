@@ -17,6 +17,7 @@ import { DermEvidenceModal } from './DermEvidenceModal';
 import { AccurxModal } from './AccurxModal';
 import { PatientExplainerModal } from './PatientExplainerModal';
 import { ShortcutsModal } from './ShortcutsModal';
+import { PathologyModal } from './PathologyModal';
 import { ErrorBoundary } from './ErrorBoundary';
 
 export interface ClinicalDocContext {
@@ -33,6 +34,7 @@ interface ClinicalToolsContextValue {
   isDermEvidenceOpen: boolean;
   isAccurxOpen: boolean;
   isPatientExplainerOpen: boolean;
+  isPathologyOpen: boolean;
   isShortcutsOpen: boolean;
 
   // Triggers
@@ -48,6 +50,8 @@ interface ClinicalToolsContextValue {
   closeAccurx: () => void;
   openPatientExplainer: () => void;
   closePatientExplainer: () => void;
+  openPathology: () => void;
+  closePathology: () => void;
   openShortcuts: () => void;
   closeShortcuts: () => void;
 
@@ -85,6 +89,7 @@ export function ClinicalToolsProvider({
   const [isDermEvidenceOpen, setIsDermEvidenceOpen] = useState(false);
   const [isAccurxOpen, setIsAccurxOpen] = useState(false);
   const [isPatientExplainerOpen, setIsPatientExplainerOpen] = useState(false);
+  const [isPathologyOpen, setIsPathologyOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
   const [activeDocContext, setActiveDocContext] = useState<ClinicalDocContext>(
@@ -106,6 +111,7 @@ export function ClinicalToolsProvider({
     setIsDermEvidenceOpen(false);
     setIsAccurxOpen(false);
     setIsPatientExplainerOpen(false);
+    setIsPathologyOpen(false);
     setIsShortcutsOpen(false);
     setPreloadedPdfFile(null);
   }, []);
@@ -154,6 +160,12 @@ export function ClinicalToolsProvider({
   }, [closeAllModals]);
   const closePatientExplainer = useCallback(() => setIsPatientExplainerOpen(false), []);
 
+  const openPathology = useCallback(() => {
+    closeAllModals();
+    setIsPathologyOpen(true);
+  }, [closeAllModals]);
+  const closePathology = useCallback(() => setIsPathologyOpen(false), []);
+
   const openShortcuts = useCallback(() => {
     closeAllModals();
     setIsShortcutsOpen(true);
@@ -198,6 +210,9 @@ export function ClinicalToolsProvider({
       } else if (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         openPatientExplainer();
+      } else if (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        openPathology();
       } else if (isCmdOrCtrl && e.key === '/') {
         e.preventDefault();
         openShortcuts();
@@ -213,6 +228,7 @@ export function ClinicalToolsProvider({
     const handleOpenDermEvent = () => openDermEvidence();
     const handleOpenAccurxEvent = () => openAccurx();
     const handleOpenPatientExplainerEvent = () => openPatientExplainer();
+    const handleOpenPathologyEvent = () => openPathology();
     const handleOpenShortcutsEvent = () => openShortcuts();
 
     const handleActiveDocChanged = (e: Event) => {
@@ -229,6 +245,7 @@ export function ClinicalToolsProvider({
     window.addEventListener('notion:open_derm_evidence_modal', handleOpenDermEvent);
     window.addEventListener('notion:open_accurx_modal', handleOpenAccurxEvent);
     window.addEventListener('notion:open_patient_explainer_modal', handleOpenPatientExplainerEvent);
+    window.addEventListener('notion:open_pathology_modal', handleOpenPathologyEvent);
     window.addEventListener('notion:open_shortcuts_modal', handleOpenShortcutsEvent);
     window.addEventListener('notion:active_doc_changed', handleActiveDocChanged);
 
@@ -240,10 +257,11 @@ export function ClinicalToolsProvider({
       window.removeEventListener('notion:open_derm_evidence_modal', handleOpenDermEvent);
       window.removeEventListener('notion:open_accurx_modal', handleOpenAccurxEvent);
       window.removeEventListener('notion:open_patient_explainer_modal', handleOpenPatientExplainerEvent);
+      window.removeEventListener('notion:open_pathology_modal', handleOpenPathologyEvent);
       window.removeEventListener('notion:open_shortcuts_modal', handleOpenShortcutsEvent);
       window.removeEventListener('notion:active_doc_changed', handleActiveDocChanged);
     };
-  }, [openEvidence, openInteractions, openPdfGuideline, openDermEvidence, openAccurx, openPatientExplainer, openShortcuts]);
+  }, [openEvidence, openInteractions, openPdfGuideline, openDermEvidence, openAccurx, openPatientExplainer, openPathology, openShortcuts]);
 
   // 2. Universal Native Link Click Capture
   // Guarantees all links (internal /doc/... or external https://...) are 100% clickable,
@@ -291,6 +309,7 @@ export function ClinicalToolsProvider({
         isDermEvidenceOpen,
         isAccurxOpen,
         isPatientExplainerOpen,
+        isPathologyOpen,
         isShortcutsOpen,
         openEvidence,
         closeEvidence,
@@ -304,6 +323,8 @@ export function ClinicalToolsProvider({
         closeAccurx,
         openPatientExplainer,
         closePatientExplainer,
+        openPathology,
+        closePathology,
         openShortcuts,
         closeShortcuts,
         activeDocContext,
@@ -388,6 +409,28 @@ export function ClinicalToolsProvider({
           currentDocTitle={activeDocContext.title}
           currentDocContext={activeDocContext.contentMarkdown}
           onInsertIntoPage={insertIntoActiveDoc}
+        />
+      </ErrorBoundary>
+
+      {/* Pathology & Blood Results Analyser (BSG / NICE) Modal */}
+      <ErrorBoundary fallbackTitle="Pathology Analyser Error">
+        <PathologyModal
+          isOpen={isPathologyOpen}
+          onClose={closePathology}
+          currentDocId={activeDocContext.id}
+          currentDocTitle={activeDocContext.title}
+          currentDocContext={activeDocContext.contentMarkdown}
+          onInsertIntoPage={insertIntoActiveDoc}
+          onOpenAccurxWithText={(text) => {
+            openAccurx();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('notion:prefill_accurx', {
+                  detail: { text },
+                })
+              );
+            }
+          }}
         />
       </ErrorBoundary>
     </ClinicalToolsContext.Provider>

@@ -30,6 +30,7 @@ import {
   MessageSquare,
   Smartphone,
   Monitor,
+  FlaskConical,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -62,6 +63,7 @@ interface TopNavProps {
   onOpenDermEvidence?: () => void;
   onOpenAccurx?: () => void;
   onOpenPatientExplainer?: () => void;
+  onOpenPathology?: () => void;
   isSubpagesEnabled?: boolean;
   onToggleSubpages?: () => void;
   isAttachmentsEnabled?: boolean;
@@ -97,6 +99,7 @@ export function TopNav({
   onOpenDermEvidence,
   onOpenAccurx,
   onOpenPatientExplainer,
+  onOpenPathology,
   isSubpagesEnabled = false,
   onToggleSubpages,
   isAttachmentsEnabled = false,
@@ -232,6 +235,19 @@ export function TopNav({
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             <span className="hidden sm:inline">Interactions</span>
+          </button>
+        )}
+
+        {/* Pathology Analyser BSG / NICE */}
+        {onOpenPathology && (
+          <button
+            onClick={onOpenPathology}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/50 border border-sky-200/60 dark:border-sky-800/60 transition shadow-xs flex-shrink-0"
+            title="Open 🧪 Pathology Analyser BSG / NICE (Cmd+Shift+B)"
+          >
+            <FlaskConical className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+            <span className="hidden sm:inline">🧪 Pathology (BSG/NICE)</span>
+            <span className="inline sm:hidden text-[11px]">Bloods</span>
           </button>
         )}
 
@@ -597,6 +613,25 @@ export function TopNav({
                 </button>
               )}
 
+              {onOpenPathology && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenPathology();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-sky-50 dark:hover:bg-sky-950/40 text-sky-700 dark:text-sky-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                    <span>🧪 Pathology Analyser BSG / NICE</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-sky-100 dark:bg-sky-900/60 text-sky-700 dark:text-sky-300">
+                    Lab Triage
+                  </span>
+                </button>
+              )}
+
               {onOpenDermEvidence && (
                 <button
                   type="button"
@@ -694,6 +729,16 @@ export function TopNav({
           >
             <ShieldAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
             <span>Interactions</span>
+          </button>
+        )}
+        {onOpenPathology && (
+          <button
+            type="button"
+            onClick={onOpenPathology}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border border-sky-200/80 dark:border-sky-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <FlaskConical className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+            <span>🧪 Bloods</span>
           </button>
         )}
         {onOpenPdfGuideline && (

@@ -65,6 +65,7 @@ export default function Editor({
     openDermEvidence,
     openAccurx,
     openPatientExplainer,
+    openPathology,
     openShortcuts,
     setActiveDocContext,
   } = useClinicalTools();
@@ -1132,6 +1133,7 @@ export default function Editor({
         onOpenDermEvidence={openDermEvidence}
         onOpenAccurx={openAccurx}
         onOpenPatientExplainer={openPatientExplainer}
+        onOpenPathology={openPathology}
         isSubpagesEnabled={isSubpagesEnabled}
         onToggleSubpages={() => setIsSubpagesEnabled((prev) => !prev)}
         isAttachmentsEnabled={isAttachmentsEnabled}
