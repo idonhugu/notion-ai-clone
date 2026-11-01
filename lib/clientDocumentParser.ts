@@ -72,7 +72,7 @@ export async function extractTextFromFileInBrowser(file: File): Promise<Extracti
     if (name.endsWith('.pdf') || mime.includes('pdf')) {
       const buffer = await file.arrayBuffer();
       const raw = await extractPdfTextInBrowser(buffer);
-      if (raw && isValidDocumentText(raw)) {
+      if (raw && isGenuineReadableText(raw)) {
         const cleaned = cleanDocumentText(raw);
         return toExtractionResult(cleaned, true);
       }
@@ -108,12 +108,52 @@ function toExtractionResult(text: string, extractedLocally: boolean): Extraction
 }
 
 /**
- * Checks if the text has reasonable word content rather than binary garbage.
+ * Verifies that extracted text consists of authentic, readable natural language words
+ * rather than compressed binary fragments, PDF operator noise, or corrupted stream bytes.
  */
-function isValidDocumentText(text: string): boolean {
-  if (!text || text.trim().length < 25) return false;
-  const words = text.match(/[a-zA-Z]{3,}/g);
-  return words !== null && words.length >= 8;
+export function isGenuineReadableText(text: string): boolean {
+  if (!text || text.trim().length < 30) return false;
+
+  const words = text.match(/[a-zA-Z]{2,}/g) || [];
+  if (words.length < 10) return false;
+
+  // 1. Check for PDF internal syntax dominance
+  const pdfKeywords = [
+    'obj',
+    'endobj',
+    'stream',
+    'endstream',
+    'xref',
+    'trailer',
+    'flatedecode',
+    'fontfile',
+    'type1',
+    'truetype',
+    'procset',
+    'colorspace',
+    'fontdescriptor',
+    'length',
+    'filter',
+  ];
+  let pdfKeywordHits = 0;
+  for (const w of words) {
+    if (pdfKeywords.includes(w.toLowerCase())) pdfKeywordHits++;
+  }
+  if (pdfKeywordHits / words.length > 0.35) return false;
+
+  // 2. Must contain common English or clinical words
+  const commonWords =
+    /\b(the|and|is|in|to|of|for|with|on|at|by|from|this|that|or|an|not|be|are|as|have|has|patient|clinical|management|guideline|symptom|dose|treatment|referral|review|history|exam|acute|chronic|care|skin|rash|lesion|primary|nhs|gp|medicine|disease|infection|blood|notes|session|slides|presentation)\b/i;
+  if (!commonWords.test(text)) return false;
+
+  // 3. Vowel ratio check (natural human language has 22% - 65% vowels among letters)
+  const letters = text.replace(/[^a-zA-Z]/g, '');
+  if (letters.length < 20) return false;
+  const vowels = (letters.match(/[aeiouyAEIOUY]/g) || []).length;
+  const vowelRatio = vowels / letters.length;
+  if (vowelRatio < 0.22 || vowelRatio > 0.65) return false;
+
+  return true;
 }
 
 /**
@@ -136,14 +176,29 @@ function cleanDocumentText(text: string): string {
 }
 
 /* =========================================================================
-   PDF IN-BROWSER STREAM DECOMPRESSOR & OPERATOR PARSER
+   PDF IN-BROWSER PARSER (PDFParse v2 with Dual-Engine Fallback)
    ========================================================================= */
 
 async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
+  // 1. Primary Engine: PDFParse v2 (uses pdfjs-dist internally for full CMap, ToUnicode, and font mapping)
+  try {
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const res = await parser.getText();
+    if (res && res.text && res.text.trim().length > 30) {
+      if (isGenuineReadableText(res.text)) {
+        return res.text;
+      }
+    }
+  } catch (err) {
+    console.warn('In-browser PDFParse notice:', err);
+  }
+
+  // 2. Secondary Engine: Decompressed /FlateDecode stream extraction
+  // (strictly parses only successfully decompressed text streams, NEVER raw binary files)
   const bytes = new Uint8Array(buffer);
   const outTexts: string[] = [];
 
-  // Keywords: "stream" and "endstream"
   const streamKw = [115, 116, 114, 101, 97, 109]; // "stream"
   const endStreamKw = [101, 110, 100, 115, 116, 114, 101, 97, 109]; // "endstream"
 
@@ -168,7 +223,7 @@ async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
       // Scan for matching endstream
       let endPos = dataStart;
       let foundEnd = false;
-      const scanLimit = Math.min(bytes.length - endStreamKw.length, dataStart + 600000); // 600 KB per stream max
+      const scanLimit = Math.min(bytes.length - endStreamKw.length, dataStart + 600000);
       while (endPos < scanLimit) {
         let endMatch = true;
         for (let j = 0; j < endStreamKw.length; j++) {
@@ -191,15 +246,20 @@ async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
 
         const streamSlice = bytes.subarray(dataStart, dataEnd);
         if (streamSlice.length > 4) {
-          // 1. Try inflate with standard zlib header
           let decompressed = await inflateZlibStream(streamSlice);
           if (!decompressed) {
-            // 2. Try inflate raw (no zlib wrapper)
             decompressed = await inflateRawStream(streamSlice);
           }
 
-          if (decompressed && decompressed.length > 5) {
-            parsePdfOperators(decompressed, outTexts);
+          if (decompressed && decompressed.length > 10) {
+            // Only parse if decompressed stream contains text operators (BT, ET, Tj, TJ)
+            if (
+              decompressed.includes('BT') ||
+              decompressed.includes('Tj') ||
+              decompressed.includes('TJ')
+            ) {
+              parsePdfOperators(decompressed, outTexts);
+            }
           }
         }
 
@@ -211,12 +271,7 @@ async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
     pos++;
   }
 
-  // Also parse any uncompressed operators directly in the PDF body
-  try {
-    const rawDecoded = new TextDecoder('latin1').decode(bytes);
-    parsePdfOperators(rawDecoded, outTexts);
-  } catch {}
-
+  // NOTE: Never decode uncompressed raw binary with latin1 to avoid catching binary font/image noise.
   return outTexts.join(' ');
 }
 

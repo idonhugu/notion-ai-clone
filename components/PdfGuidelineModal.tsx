@@ -237,6 +237,25 @@ export function PdfGuidelineModal({
       };
     });
 
+    // Count total extracted recommendations across all conditions
+    const totalExtractedCount = conditions.reduce((acc, c) => {
+      return (
+        acc +
+        SECTION_DEFINITIONS.reduce((sAcc, def) => sAcc + (c.sections[def.key]?.length || 0), 0)
+      );
+    }, 0);
+
+    if (totalExtractedCount === 0) {
+      const reason =
+        result.lectureOverview ||
+        'No clinical recommendations or conditions could be decoded from this document.';
+      setAnalysisError(
+        `${reason} Please paste the lecture notes or slide text directly into the "Paste Notes" tab for instant analysis.`
+      );
+      setAnalysisResult(null);
+      return;
+    }
+
     result.matchedConditions = conditions;
     setAnalysisResult(result);
     setFallbackNotice(fallbackNote || null);

@@ -1,4 +1,5 @@
 import zlib from 'zlib';
+import { isGenuineReadableText } from '@/lib/clientDocumentParser';
 
 /**
  * Universal document text extractor for PDFs, Text, Markdown, CSV, JSON, and Code.
@@ -48,9 +49,9 @@ export async function extractTextFromDataUrl(
         // Fallback to stream extraction below
       }
 
-      // 2. Secondary Engine: Decompressed Flate & raw text stream extractor
+      // 2. Secondary Engine: Decompressed Flate stream extractor
       const streamText = extractTextFromPdfBuffer(buffer);
-      if (streamText && isValidDocumentText(streamText)) {
+      if (streamText && isGenuineReadableText(streamText)) {
         return cleanExtractedText(streamText);
       }
 
@@ -84,19 +85,12 @@ export async function extractTextFromDataUrl(
   }
 }
 
-function isValidDocumentText(text: string): boolean {
-  if (!text || text.trim().length < 30) return false;
-  // Must contain at least 10 readable words with 3+ alphabetic characters
-  const words = text.match(/[a-zA-Z]{3,}/g);
-  return words !== null && words.length >= 10;
-}
-
 function extractTextFromPdfBuffer(buffer: Buffer): string {
   try {
     const texts: string[] = [];
     const content = buffer.toString('binary');
 
-    // 1. Try extracting and decompressing /FlateDecode streams
+    // Extract and decompress /FlateDecode streams only
     const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
     let match: RegExpExecArray | null;
 
@@ -112,15 +106,18 @@ function extractTextFromPdfBuffer(buffer: Buffer): string {
           } catch {}
         }
 
-        if (decompressed) {
+        if (
+          decompressed &&
+          (decompressed.includes('BT') ||
+            decompressed.includes('Tj') ||
+            decompressed.includes('TJ'))
+        ) {
           parseTextOperators(decompressed, texts);
         }
       } catch {}
     }
 
-    // 2. Also parse uncompressed operators directly in the PDF body
-    parseTextOperators(content, texts);
-
+    // Note: Never parse raw binary PDF bytes to prevent binary noise
     return texts.join(' ');
   } catch {
     return '';
