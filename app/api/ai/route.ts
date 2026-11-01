@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
     const isAddPresentationRequest =
       action === 'add_presentation' ||
       /\b(add|create|generate|make|insert|include)\b.*(\bpresentation|presentations|clinical note|clinical condition|guidance\b)/i.test(prompt || '') ||
-      (/\b(add|create)\s+(presentation\s+on\s+|clinical presentation\s+)?([A-Z][a-zA-Z\s]{3,})/i.test(prompt || '') &&
+      (/\b(add|create|new|generate)\b/i.test(prompt || '') &&
         ((documentTitle && /presentation/i.test(documentTitle)) || (context && /NICE CKS/i.test(context))));
 
     if (isAddPresentationRequest) {
@@ -236,28 +236,29 @@ The user wants to add clinical presentations for specifically: "${conditionTarge
 User prompt: "${prompt}".
 Identify each clinical condition requested in "${conditionTargetStr}".
 For EACH condition, generate comprehensive, evidence-based UK General Practice guidance strictly following the standard 9-point NICE CKS structure.
+For each of the 9 sections, provide 2 to 4 concise, high-yield bullet points (1 to 2 sentences each). Keep all entries direct, clinically precise, and practical for NHS Primary Care.
 Return a valid JSON object matching this schema:
 {
   "presentations": [
     {
       "title": "${extractedConditions[0] || 'Condition Name'}",
-      "icon": "Single appropriate medical emoji (e.g. 🩺, 🧠, 🫀, 🫁, 🦴)",
+      "icon": "Single appropriate medical emoji (e.g. 🩺, 👁️, 🧠, 🫀, 🫁, 🦴)",
       "history": [
-        "Site, onset, duration, character, progression, morning stiffness",
-        "Associated symptoms and systemic features",
+        "Site, onset, duration, character, progression, triggers",
+        "Associated symptoms, systemic features, and allergic/atopic history",
         "Key red flags to screen for",
         "Past medical history, medications, risk factors"
       ],
       "examination": [
         "Vital signs and general appearance",
-        "Focused physical examination of affected system",
+        "Focused physical examination of affected system/lesion",
         "Specific diagnostic physical tests",
         "Exclusion of urgent red flag physical signs"
       ],
       "investigations": [
-        "Point of care bedside tests (urine dip, blood glucose, ECG where relevant)",
-        "Primary care blood tests (FBC, ESR/CRP, U&E, LFT, etc.)",
-        "Imaging modalities indicated (X-ray, Ultrasound, CT where appropriate)"
+        "Point of care bedside tests where relevant",
+        "Primary care blood tests or swabs indicated",
+        "Imaging modalities or specialist tests if indicated"
       ],
       "differentials": [
         "Common differential 1",
@@ -272,257 +273,294 @@ Return a valid JSON object matching this schema:
         "Not-to-miss mimic 3"
       ],
       "plan": [
-        "Immediate first-line management and pharmacotherapy (specific doses/durations)",
+        "Immediate first-line management and pharmacotherapy (specific UK doses/durations)",
         "Non-pharmacological and lifestyle interventions",
-        "Patient education and self-management"
+        "Patient education, emollient guidance, or self-management"
       ],
       "safetynetting": [
         "Specific red flag warning symptoms requiring emergency attendance",
         "Clear instructions on when to return for planned review"
       ],
       "followup": [
-        "Initial review timeframe (e.g. 24-48 hours or 1-2 weeks)",
+        "Initial review timeframe (e.g. 48 hours, 1-2 weeks)",
         "Subsequent monitoring intervals"
       ],
       "referral": [
         "Emergency/same-day referral criteria (999 or acute assessment)",
-        "Urgent 2-Week-Wait suspected cancer referral criteria where applicable",
+        "Urgent 2-Week-Wait suspected referral criteria where applicable",
         "Routine specialist outpatient referral criteria"
       ]
     }
   ]
 }
-Return ONLY valid JSON. Do not include markdown code fences or conversational prose.`;
+Return ONLY valid JSON. Do not include markdown code fences or conversational prose. Ensure complete JSON closure.`;
 
-      let generatedJson = '';
-      let claudePresError: string | null = null;
-      // 1. Complex Medical Reasoning: Execute on Claude Opus 5.5
-      try {
-        const claudeRes = await generateClaudeText({
-          model: CLAUDE_MODELS.OPUS,
-          messages: [{ role: 'user', content: clinicalPrompt }],
-          temperature: 0.2,
-        });
-        if (claudeRes && claudeRes.trim().length > 0) {
-          generatedJson = claudeRes;
-        }
-      } catch (claudeErr: any) {
-        claudePresError = claudeErr?.message || String(claudeErr);
-        console.warn('Claude Opus notice for clinical presentation, falling back to Gemini:', claudePresError);
-      }
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          // 1. Immediately send initial bytes to satisfy Vercel edge/gateway timeout within 50ms!
+          controller.enqueue(
+            encoder.encode(
+              `> 🧠 **Claude Sonnet 5.5 (Anthropic):** Consulting NICE CKS & RCGP guidelines for **${conditionTargetStr}**...\n\n`
+            )
+          );
 
-      // 2. Gemini fallback if Claude did not return
-      if (!generatedJson) {
-        for (const modelId of CANDIDATE_MODELS) {
-          try {
-            const res = await generateText({
-              model: google(modelId),
-              prompt: clinicalPrompt,
-              temperature: 0.2,
-              providerOptions,
-              maxRetries: 0,
-            });
-            if (res.text && res.text.trim().length > 0) {
-              generatedJson = res.text;
-              break;
-            }
-          } catch (err) {
-            console.warn(`generateText notice on ${modelId} for clinical presentation:`, err);
-          }
-        }
-      }
-
-      let parsedList: any[] = [];
-      try {
-        const clean = generatedJson
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim();
-        const parsed = JSON.parse(clean);
-        parsedList = Array.isArray(parsed.presentations)
-          ? parsed.presentations
-          : Array.isArray(parsed)
-          ? parsed
-          : [parsed];
-      } catch (parseErr) {
-        console.error('Failed to parse clinical presentation JSON:', parseErr, generatedJson);
-      }
-
-      if (parsedList.length > 0) {
-        const createdDocs: any[] = [];
-
-        for (const p of parsedList) {
-          if (!p.title) continue;
-          p.title = formatPresentationTitle(p.title);
-          const docId = crypto.randomUUID();
-          const blocks = buildClinicalDocumentBlocks(p);
-
-          // Insert sub-page document into Supabase
-          await supabase.from('documents').insert({
-            id: docId,
-            user_id: 'admin-user',
-            title: p.title,
-            icon: p.icon || '🩺',
-            parent_id: targetParentId,
-            content: blocks,
-            attachments: [],
-            is_archived: false,
-            is_favorite: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-
-          // Automatically update parent index in alphabetical order under letter headings
-          try {
-            const { data: parentDoc } = await supabase
-              .from('documents')
-              .select('*')
-              .eq('id', targetParentId)
-              .single();
-
-            if (parentDoc && Array.isArray(parentDoc.content)) {
-              const letter = p.title.trim().charAt(0).toUpperCase();
-              const newLinkBlock = {
-                id: crypto.randomUUID(),
-                type: 'paragraph',
-                props: { textColor: 'default', textAlignment: 'left', backgroundColor: 'default' },
-                content: [
-                  { type: 'text', text: `${p.icon || '🩺'} `, styles: {} },
-                  {
-                    type: 'link',
-                    href: `/doc/${docId}`,
-                    content: [{ type: 'text', text: p.title, styles: { underline: true } }],
-                  },
-                ],
-                children: [],
-              };
-
-              let updatedBlocks = [...parentDoc.content];
-              const letterHeadingIdx = updatedBlocks.findIndex(
-                (b: any) =>
-                  b.type === 'heading' &&
-                  b.content?.[0]?.text?.trim().toUpperCase() === letter
-              );
-
-              if (letterHeadingIdx !== -1) {
-                // Letter heading exists: find where this letter section ends
-                let nextHeadingIdx = updatedBlocks.findIndex(
-                  (b: any, idx: number) => idx > letterHeadingIdx && b.type === 'heading'
-                );
-                if (nextHeadingIdx === -1) nextHeadingIdx = updatedBlocks.length;
-
-                // Find exact alphabetical insertion index within this section
-                let existingIdx = -1;
-                let insertIdx = nextHeadingIdx;
-
-                for (let i = letterHeadingIdx + 1; i < nextHeadingIdx; i++) {
-                  const block = updatedBlocks[i];
-                  const link = block.content?.find((c: any) => c.type === 'link');
-                  const blockTitle = (link?.content?.[0]?.text || block.content?.map((c: any) => c.text).join('') || '')
-                    .replace(/^[^\w\s]+/, '')
-                    .trim();
-
-                  if (!blockTitle) continue;
-
-                  if (blockTitle.toLowerCase() === p.title.toLowerCase()) {
-                    existingIdx = i;
-                    break;
-                  }
-
-                  if (p.title.localeCompare(blockTitle, undefined, { sensitivity: 'base' }) < 0) {
-                    insertIdx = i;
-                    break;
-                  }
-                }
-
-                if (existingIdx !== -1) {
-                  // Replace existing duplicate with new link
-                  updatedBlocks[existingIdx] = newLinkBlock;
-                } else {
-                  // Insert in strictly alphabetical position
-                  updatedBlocks.splice(insertIdx, 0, newLinkBlock);
-                }
+          // 2. Heartbeat to keep connection alive every 2.5s and show user progress
+          const progressStages = [
+            `> *Structuring History, Examination & Red Flags (NICE CKS)...*\n`,
+            `> *Formulating Primary Care Investigations & Differential Diagnoses...*\n`,
+            `> *Drafting Evidence-Based Management Plan & Safety-Netting...*\n`,
+            `> *Synthesizing Referral Criteria & Follow-Up Timelines...*\n`,
+            `> *Compiling 9-Point UK Clinical Guide & Registering Sub-page...*\n`,
+          ];
+          let progressIdx = 0;
+          const intervalId = setInterval(() => {
+            try {
+              if (progressIdx < progressStages.length) {
+                controller.enqueue(encoder.encode(progressStages[progressIdx++]));
               } else {
-                // Letter heading does NOT exist: find alphabetical spot among existing letter headings
-                const nextAlphaHeadingIdx = updatedBlocks.findIndex(
-                  (b: any) =>
-                    b.type === 'heading' &&
-                    b.content?.[0]?.text &&
-                    b.content[0].text.trim().toUpperCase().localeCompare(letter) > 0
-                );
+                controller.enqueue(encoder.encode(`> *Formatting clinical blocks...*\n`));
+              }
+            } catch {}
+          }, 2500);
 
-                const newHeadingBlock = {
-                  id: crypto.randomUUID(),
-                  type: 'heading',
-                  props: {
-                    level: 2,
-                    textColor: 'default',
-                    isToggleable: false,
-                    textAlignment: 'left',
-                    backgroundColor: 'default',
-                  },
-                  content: [{ type: 'text', text: letter, styles: {} }],
-                  children: [],
-                };
+          let generatedJson = '';
+          let claudePresError: string | null = null;
 
-                if (nextAlphaHeadingIdx !== -1) {
-                  // Insert letter heading and link block right before the next alphabetical letter
-                  updatedBlocks.splice(nextAlphaHeadingIdx, 0, newHeadingBlock, newLinkBlock);
-                } else {
-                  // No letter comes after it, append to the end
-                  updatedBlocks.push(newHeadingBlock, newLinkBlock);
+          // 3. Primary Engine: Claude Sonnet 5.5 (Anthropic)
+          try {
+            const claudeRes = await generateClaudeText({
+              model: CLAUDE_MODELS.SONNET,
+              messages: [{ role: 'user', content: clinicalPrompt }],
+              maxTokens: 5000,
+            });
+            if (claudeRes && claudeRes.trim().length > 0) {
+              generatedJson = claudeRes;
+            }
+          } catch (claudeErr: any) {
+            claudePresError = claudeErr?.message || String(claudeErr);
+            console.warn('Claude Sonnet notice for clinical presentation, falling back to Gemini:', claudePresError);
+          }
+
+          // 4. Gemini fallback if Claude did not return
+          if (!generatedJson) {
+            try {
+              controller.enqueue(
+                encoder.encode(
+                  `\n> ⚠️ *Claude notice (${(claudePresError || 'rate/quota').slice(0, 60)}). Reverting to Google Gemini...*\n\n`
+                )
+              );
+            } catch {}
+
+            for (const modelId of CANDIDATE_MODELS) {
+              try {
+                const res = await generateText({
+                  model: google(modelId),
+                  prompt: clinicalPrompt,
+                  temperature: 0.2,
+                  providerOptions,
+                  maxRetries: 0,
+                });
+                if (res.text && res.text.trim().length > 0) {
+                  generatedJson = res.text;
+                  break;
                 }
+              } catch (err) {
+                console.warn(`generateText notice on ${modelId} for clinical presentation:`, err);
+              }
+            }
+          }
+
+          clearInterval(intervalId);
+
+          let parsedList: any[] = [];
+          try {
+            let clean = generatedJson.trim();
+            const jsonMatch = clean.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              clean = jsonMatch[0];
+            } else {
+              clean = clean
+                .replace(/^```json\s*/i, '')
+                .replace(/^```\s*/i, '')
+                .replace(/\s*```$/i, '')
+                .trim();
+            }
+            const parsed = JSON.parse(clean);
+            parsedList = Array.isArray(parsed.presentations)
+              ? parsed.presentations
+              : Array.isArray(parsed)
+              ? parsed
+              : [parsed];
+          } catch (parseErr) {
+            console.error('Failed to parse clinical presentation JSON:', parseErr, generatedJson);
+          }
+
+          if (parsedList.length > 0) {
+            const createdDocs: any[] = [];
+
+            for (const p of parsedList) {
+              if (!p.title) continue;
+              p.title = formatPresentationTitle(p.title);
+              const docId = crypto.randomUUID();
+              const blocks = buildClinicalDocumentBlocks(p);
+
+              // Insert sub-page document into Supabase
+              await supabase.from('documents').insert({
+                id: docId,
+                user_id: 'admin-user',
+                title: p.title,
+                icon: p.icon || '🩺',
+                parent_id: targetParentId,
+                content: blocks,
+                attachments: [],
+                is_archived: false,
+                is_favorite: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+
+              // Automatically update parent index in alphabetical order under letter headings
+              try {
+                const { data: parentDoc } = await supabase
+                  .from('documents')
+                  .select('*')
+                  .eq('id', targetParentId)
+                  .single();
+
+                if (parentDoc && Array.isArray(parentDoc.content)) {
+                  const letter = p.title.trim().charAt(0).toUpperCase();
+                  const newLinkBlock = {
+                    id: crypto.randomUUID(),
+                    type: 'paragraph',
+                    props: { textColor: 'default', textAlignment: 'left', backgroundColor: 'default' },
+                    content: [
+                      { type: 'text', text: `${p.icon || '🩺'} `, styles: {} },
+                      {
+                        type: 'link',
+                        href: `/doc/${docId}`,
+                        content: [{ type: 'text', text: p.title, styles: { underline: true } }],
+                      },
+                    ],
+                    children: [],
+                  };
+
+                  let updatedBlocks = [...parentDoc.content];
+                  const letterHeadingIdx = updatedBlocks.findIndex(
+                    (b: any) =>
+                      b.type === 'heading' &&
+                      b.content?.[0]?.text?.trim().toUpperCase() === letter
+                  );
+
+                  if (letterHeadingIdx !== -1) {
+                    let nextHeadingIdx = updatedBlocks.findIndex(
+                      (b: any, idx: number) => idx > letterHeadingIdx && b.type === 'heading'
+                    );
+                    if (nextHeadingIdx === -1) nextHeadingIdx = updatedBlocks.length;
+
+                    let existingIdx = -1;
+                    let insertIdx = nextHeadingIdx;
+
+                    for (let i = letterHeadingIdx + 1; i < nextHeadingIdx; i++) {
+                      const block = updatedBlocks[i];
+                      const link = block.content?.find((c: any) => c.type === 'link');
+                      const blockTitle = (link?.content?.[0]?.text || block.content?.map((c: any) => c.text).join('') || '')
+                        .replace(/^[^\w\s]+/, '')
+                        .trim();
+
+                      if (!blockTitle) continue;
+
+                      if (blockTitle.toLowerCase() === p.title.toLowerCase()) {
+                        existingIdx = i;
+                        break;
+                      }
+
+                      if (p.title.localeCompare(blockTitle, undefined, { sensitivity: 'base' }) < 0) {
+                        insertIdx = i;
+                        break;
+                      }
+                    }
+
+                    if (existingIdx !== -1) {
+                      updatedBlocks[existingIdx] = newLinkBlock;
+                    } else {
+                      updatedBlocks.splice(insertIdx, 0, newLinkBlock);
+                    }
+                  } else {
+                    const nextAlphaHeadingIdx = updatedBlocks.findIndex(
+                      (b: any) =>
+                        b.type === 'heading' &&
+                        b.content?.[0]?.text &&
+                        b.content[0].text.trim().toUpperCase().localeCompare(letter) > 0
+                    );
+
+                    const newHeadingBlock = {
+                      id: crypto.randomUUID(),
+                      type: 'heading',
+                      props: {
+                        level: 2,
+                        textColor: 'default',
+                        isToggleable: false,
+                        textAlignment: 'left',
+                        backgroundColor: 'default',
+                      },
+                      content: [{ type: 'text', text: letter, styles: {} }],
+                      children: [],
+                    };
+
+                    if (nextAlphaHeadingIdx !== -1) {
+                      updatedBlocks.splice(nextAlphaHeadingIdx, 0, newHeadingBlock, newLinkBlock);
+                    } else {
+                      updatedBlocks.push(newHeadingBlock, newLinkBlock);
+                    }
+                  }
+
+                  await supabase
+                    .from('documents')
+                    .update({ content: updatedBlocks, updated_at: new Date().toISOString() })
+                    .eq('id', targetParentId);
+                }
+              } catch (parentUpdateErr) {
+                console.warn('Parent index update warning:', parentUpdateErr);
               }
 
-              await supabase
-                .from('documents')
-                .update({ content: updatedBlocks, updated_at: new Date().toISOString() })
-                .eq('id', targetParentId);
+              createdDocs.push({ ...p, id: docId });
             }
-          } catch (parentUpdateErr) {
-            console.warn('Parent index update warning:', parentUpdateErr);
+
+            let responseMarkdown = `\n\n✅ **Created Clinical Presentation Page:**\n\n`;
+            for (const doc of createdDocs) {
+              responseMarkdown += `${doc.icon || '🩺'} [${doc.title}](/doc/${doc.id})\n\n`;
+              responseMarkdown += `*(Added as active subpage and linked in your clinical index under section **${doc.title.charAt(0).toUpperCase()}**)*\n\n`;
+              responseMarkdown += `### 📋 9-Point Clinical Guidance Summary:\n`;
+              responseMarkdown += `- **📋 History:** ${doc.history?.[0] || 'Detailed history guidance'}\n`;
+              responseMarkdown += `- **🩺 Examination:** ${doc.examination?.[0] || 'Physical exam signs'}\n`;
+              responseMarkdown += `- **🔬 Investigations:** ${doc.investigations?.[0] || 'Primary care workup'}\n`;
+              responseMarkdown += `- **🔀 Differentials:** ${(doc.differentials || []).slice(0, 4).join(', ')}\n`;
+              responseMarkdown += `- **🚩 Rare / Not to miss:** ${(doc.rare || []).slice(0, 3).join(', ')}\n`;
+              responseMarkdown += `- **💊 Plan:** ${doc.plan?.[0] || 'NICE first-line management'}\n`;
+              responseMarkdown += `- **🔒 Safety-netting:** ${doc.safetynetting?.[0] || 'Urgent red flag warnings'}\n\n`;
+            }
+            responseMarkdown += `---\n*The complete 9-point NICE CKS & RCGP clinical guide has been saved to your workspace. Click the link above to view it!*`;
+
+            controller.enqueue(encoder.encode(responseMarkdown));
+          } else {
+            controller.enqueue(
+              encoder.encode(
+                `\n\n⚠️ Could not format clinical presentation for "${conditionTargetStr}". Please try again or rephrase the condition name.`
+              )
+            );
           }
 
-          createdDocs.push({ ...p, id: docId });
-        }
+          controller.close();
+        },
+      });
 
-        // Return structured markdown response with clickable links and clinical summary
-        let responseMarkdown = '';
-        if (claudePresError) {
-          responseMarkdown += formatClaudeFallbackBanner(claudePresError, 'Claude Opus 5.5');
-        }
-        responseMarkdown += `✅ **Created Clinical Presentation Page:**\n\n`;
-        for (const doc of createdDocs) {
-          responseMarkdown += `${doc.icon || '🩺'} [${doc.title}](/doc/${doc.id})\n\n`;
-          responseMarkdown += `*(Added as active subpage and linked in your clinical index under section **${doc.title.charAt(0).toUpperCase()}**)*\n\n`;
-          responseMarkdown += `### 📋 9-Point Clinical Guidance Summary:\n`;
-          responseMarkdown += `- **📋 History:** ${doc.history?.[0] || 'Detailed history guidance'}\n`;
-          responseMarkdown += `- **🩺 Examination:** ${doc.examination?.[0] || 'Physical exam signs'}\n`;
-          responseMarkdown += `- **🔬 Investigations:** ${doc.investigations?.[0] || 'Primary care workup'}\n`;
-          responseMarkdown += `- **🔀 Differentials:** ${(doc.differentials || []).slice(0, 4).join(', ')}\n`;
-          responseMarkdown += `- **🚩 Rare / Not to miss:** ${(doc.rare || []).slice(0, 3).join(', ')}\n`;
-          responseMarkdown += `- **💊 Plan:** ${doc.plan?.[0] || 'NICE first-line management'}\n`;
-          responseMarkdown += `- **🔒 Safety-netting:** ${doc.safetynetting?.[0] || 'Urgent red flag warnings'}\n\n`;
-        }
-        responseMarkdown += `---\n*The complete 9-point NICE CKS & RCGP clinical guide has been saved to your workspace. Click the link above to view it!*`;
-
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(responseMarkdown));
-            controller.close();
-          },
-        });
-
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Created-Doc-Id': createdDocs[0]?.id || '',
-          },
-        });
-      }
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      });
     }
 
     // Extract text from primary file

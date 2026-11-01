@@ -42,13 +42,21 @@ export function AIInlineMenu({
     setStreamedResponse('');
     setError(null);
 
+    const activePrompt = (customPrompt || prompt).trim();
+    const isPresentationAction =
+      action === 'add_presentation' ||
+      /\b(add|create|generate|make|insert)\b.*(presentation|guidance|clinical note|periorbital|eczema|dermatitis|migraine|gout|hypertension|asthma|diabetes)/i.test(activePrompt) ||
+      (documentTitle && /presentation/i.test(documentTitle) && /^(add|create|generate|make)\b/i.test(activePrompt));
+
+    const resolvedAction = isPresentationAction ? 'add_presentation' : action;
+
     try {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action,
-          prompt: customPrompt || prompt,
+          action: resolvedAction,
+          prompt: activePrompt,
           context: documentContext,
           documentId,
           documentTitle,
@@ -131,7 +139,7 @@ export function AIInlineMenu({
             <Sparkles className="w-3.5 h-3.5 animate-pulse" />
           </div>
           <span className="text-xs font-semibold text-purple-900 dark:text-purple-300">
-            Ask Laksha&apos;s AI (Gemini Flash)
+            Ask Laksha&apos;s AI (Claude Sonnet 5.5 & Gemini)
           </span>
         </div>
         <button
@@ -179,8 +187,13 @@ export function AIInlineMenu({
                   key={idx}
                   onClick={() => {
                     if (item.action === 'add_presentation' || item.defaultPrompt.endsWith('on ')) {
-                      setPrompt(item.defaultPrompt);
-                      setTimeout(() => inputRef.current?.focus(), 50);
+                      if (prompt.trim() && !prompt.toLowerCase().startsWith('add presentation')) {
+                        const target = prompt.trim().replace(/^add\s+/i, '');
+                        handleAIRequest('add_presentation', `Add presentation on ${target}`);
+                      } else {
+                        setPrompt(item.defaultPrompt);
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }
                     } else {
                       handleAIRequest(item.action, item.defaultPrompt);
                     }
