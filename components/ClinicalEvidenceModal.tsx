@@ -301,11 +301,12 @@ ${newItem.personalReflection ? `>\n> 📝 **Clinician Reflection:** *${newItem.p
   };
 
   const handleCopyLearningItem = (item: SavedClinicalLearning) => {
-    const text = `💡 ${item.topic} (${item.dateFormatted})
-Clinical Query: "${item.query}"
+    const pts = Array.isArray(item.learningPoints) ? item.learningPoints : [];
+    const text = `💡 ${item.topic || 'Clinical Learning Point'} (${item.dateFormatted || 'Recently'})
+Clinical Query: "${item.query || ''}"
 
 Key Learning Points:
-${item.learningPoints.map((p) => `- 🎯 ${p}`).join('\n')}
+${pts.map((p) => `- 🎯 ${p}`).join('\n')}
 ${item.personalReflection ? `\nReflection: ${item.personalReflection}` : ''}`;
     navigator.clipboard.writeText(text);
     setCopiedLearningId(item.id);
@@ -321,11 +322,12 @@ ${item.personalReflection ? `\nReflection: ${item.personalReflection}` : ''}`;
 
   const handleInsertSavedLearningToDoc = (item: SavedClinicalLearning) => {
     if (!onInsertIntoPage) return;
+    const pts = Array.isArray(item.learningPoints) ? item.learningPoints : [];
     const docSnippet = `
-> 💡 **Clinical Learning Point (${item.topic}) — ${item.dateFormatted}:**
-> **Scenario:** "${item.query}"
+> 💡 **Clinical Learning Point (${item.topic || 'Clinical Point'}) — ${item.dateFormatted || 'Recently'}:**
+> **Scenario:** "${item.query || ''}"
 >
-${item.learningPoints.map((p) => `> - 🎯 ${p}`).join('\n')}
+${pts.map((p) => `> - 🎯 ${p}`).join('\n')}
 ${item.personalReflection ? `>\n> 📝 **Reflection:** *${item.personalReflection}*\n` : ''}
 `;
     onInsertIntoPage(docSnippet);
@@ -397,15 +399,18 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
   };
 
   const filteredLearnings = useMemo(() => {
+    if (!Array.isArray(savedLearnings)) return [];
     if (!learningSearchQuery.trim()) return savedLearnings;
     const q = learningSearchQuery.toLowerCase().trim();
-    return savedLearnings.filter(
-      (l) =>
-        l.topic.toLowerCase().includes(q) ||
-        l.query.toLowerCase().includes(q) ||
-        l.learningPoints.some((p) => p.toLowerCase().includes(q)) ||
-        (l.personalReflection && l.personalReflection.toLowerCase().includes(q))
-    );
+    return savedLearnings.filter((l) => {
+      const topicMatch = (l.topic || '').toLowerCase().includes(q);
+      const queryMatch = (l.query || '').toLowerCase().includes(q);
+      const pointsMatch =
+        Array.isArray(l.learningPoints) &&
+        l.learningPoints.some((p) => (p || '').toLowerCase().includes(q));
+      const refMatch = l.personalReflection ? l.personalReflection.toLowerCase().includes(q) : false;
+      return topicMatch || queryMatch || pointsMatch || refMatch;
+    });
   }, [savedLearnings, learningSearchQuery]);
 
   return (
@@ -1218,7 +1223,7 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
                             Key Learning Points & Takeaways:
                           </span>
                           <div className="space-y-1">
-                            {item.learningPoints.map((pt, pIdx) => (
+                            {(Array.isArray(item.learningPoints) ? item.learningPoints : []).map((pt, pIdx) => (
                               <div key={pIdx} className="flex items-start gap-2 text-xs text-neutral-800 dark:text-neutral-200">
                                 <span className="text-amber-500 font-bold shrink-0 mt-0.5">🎯</span>
                                 <span>{pt}</span>

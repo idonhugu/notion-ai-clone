@@ -326,7 +326,7 @@ export function Sidebar({
         <button
           onClick={() => {
             window.dispatchEvent(new CustomEvent('notion:open_evidence_modal'));
-            setIsMobileOpen(false);
+            setTimeout(() => setIsMobileOpen(false), 80);
           }}
           className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition font-medium"
           title="Clinical Evidence & Decision Support (Cmd+E)"
@@ -344,7 +344,7 @@ export function Sidebar({
         <button
           onClick={() => {
             window.dispatchEvent(new CustomEvent('notion:open_stockleys_modal'));
-            setIsMobileOpen(false);
+            setTimeout(() => setIsMobileOpen(false), 80);
           }}
           className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition font-medium"
           title="Stockley's Drug Interactions Checker (Cmd+I)"

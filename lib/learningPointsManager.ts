@@ -23,7 +23,7 @@ const STORAGE_KEY = 'notion_heidi_saved_learnings';
 const CPD_DOC_TITLE = '💡 Clinical Learning Points & CPD Log';
 
 /**
- * Safely retrieves saved clinical learnings from local cache
+ * Safely retrieves saved clinical learnings from local cache with defensive sanitization
  */
 export function getSavedLearnings(): SavedClinicalLearning[] {
   if (typeof window === 'undefined') return [];
@@ -31,7 +31,22 @@ export function getSavedLearnings(): SavedClinicalLearning[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item === 'object')
+      .map((item: any) => ({
+        id: String(item.id || 'learn_' + Math.random().toString(36).substring(2, 7)),
+        timestamp: String(item.timestamp || new Date().toISOString()),
+        dateFormatted: String(item.dateFormatted || 'Recently'),
+        topic: String(item.topic || 'Clinical Learning Point'),
+        query: String(item.query || ''),
+        learningPoints: Array.isArray(item.learningPoints)
+          ? item.learningPoints.map((p: any) => String(p || '')).filter(Boolean)
+          : [],
+        personalReflection: item.personalReflection ? String(item.personalReflection) : undefined,
+        fullEvidence: String(item.fullEvidence || ''),
+        docTitleContext: item.docTitleContext ? String(item.docTitleContext) : undefined,
+      }));
   } catch (err) {
     console.warn('Failed to read saved clinical learnings from localStorage:', err);
     return [];
@@ -334,7 +349,7 @@ export function formatLearningsForAppraisal(learnings: SavedClinicalLearning[]):
     lines.push(`> **Clinical Scenario / Query:** "${item.query}"`);
     lines.push(``);
     lines.push(`### 🎯 Key Learning Points:`);
-    item.learningPoints.forEach((pt) => {
+    (Array.isArray(item.learningPoints) ? item.learningPoints : []).forEach((pt) => {
       lines.push(`- ${pt}`);
     });
     if (item.personalReflection) {

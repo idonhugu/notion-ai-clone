@@ -202,7 +202,8 @@ export function TopNav({
             title="Open Clinical Evidence & Decision Support (Cmd+E)"
           >
             <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="hidden xs:inline">Evidence</span>
+            <span className="hidden sm:inline">Evidence (Heidi)</span>
+            <span className="inline sm:hidden text-[11px]">Evidence</span>
           </button>
         )}
 
