@@ -26,6 +26,7 @@ import {
   CopyPlus,
   BookOpen,
   ShieldAlert,
+  Eye,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -55,6 +56,7 @@ interface TopNavProps {
   onOpenEvidence?: () => void;
   onOpenInteractions?: () => void;
   onOpenPdfGuideline?: () => void;
+  onOpenDermEvidence?: () => void;
 }
 
 export function TopNav({
@@ -81,6 +83,7 @@ export function TopNav({
   onOpenEvidence,
   onOpenInteractions,
   onOpenPdfGuideline,
+  onOpenDermEvidence,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -220,6 +223,18 @@ export function TopNav({
           >
             <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
             <span className="hidden md:inline">Sync PDF</span>
+          </button>
+        )}
+
+        {/* Derm AI & Photo Evidence Analyzer */}
+        {onOpenDermEvidence && (
+          <button
+            onClick={onOpenDermEvidence}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200/60 dark:border-rose-800/60 transition shadow-xs"
+            title="Derm AI & Photo Analysis (Cmd+Shift+D)"
+          >
+            <Eye className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+            <span className="hidden sm:inline">Derm AI</span>
           </button>
         )}
 

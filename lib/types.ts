@@ -15,6 +15,7 @@ export type AIAction =
   | 'clinical_evidence'
   | 'stockleys_checker'
   | 'analyze_pdf_for_presentation'
+  | 'analyze_derm_photo'
   | 'fix_grammar'
   | 'doc_summarize'
   | 'doc_notes';

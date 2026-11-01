@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
       includeSources = true,
       documentId,
       documentTitle,
+      images,
+      clinicalData,
     } = await req.json();
 
     // Verified active Google Gemini API key provided by user (base64 encoded to protect push integrity)
@@ -927,6 +929,107 @@ ${context ? `Active Patient / Document Context:\n"""\n${context.substring(0, 200
         break;
       }
 
+      case 'analyze_derm_photo': {
+        systemInstruction = `You are the Dermatology Evidence & Clinical Vision Engine for Laksha's GP WorkSpace, modeled directly on Heidi Evidence for Dermatology, the British Association of Dermatologists (BAD), Primary Care Dermatology Society (PCDS), NICE CKS, and DermNet NZ.
+You are an expert UK Consultant Dermatologist and Specialist GP Partner with extensive expertise in General Dermatology, Teledermatology Advice & Guidance, Dermoscopy, and Dermatology in Skin of Colour (Fitzpatrick Types I through VI).
+
+YOUR MISSION:
+Deliver an authoritative, multi-layered clinical analysis of the provided dermatology photograph(s) (clinical overview, close-up, or dermatoscope image) or clinical case scenario.
+You must guide the clinician on EXACTLY HOW TO DESCRIBE the lesion/rash and dermoscopy findings using standard British dermatological nomenclature, provide ranked evidence-based differentials, red flags, 2-week wait cancer triage, and stepped-care primary care management.
+
+CRITICAL SKIN OF COLOUR PRINCIPLES (Fitzpatrick Types IV–VI):
+- Explicitly address that erythema may be subtle, masked, or absent in richly pigmented skin.
+- Look for violaceous, plum, dark brown, or ashen-grey discoloration, and follicular prominence.
+- Highlight post-inflammatory hyperpigmentation (PIH) risk and management.
+
+ALWAYS STRUCTURE YOUR REPORT WITH THESE PRECISE SECTIONS:
+
+### 🎯 Executive Clinical Impression & Triage
+- **Primary Clinical Impression:** (1-2 sentences identifying the most probable diagnosis and clinical confidence)
+- **Triage Urgency Category:**
+  - ⚡ **2-Week Wait (2WW) Suspected Skin Cancer Referral** (NICE NG12 - suspected melanoma or squamous cell carcinoma)
+  - 🚨 **Same-Day / Emergency Secondary Care** (suspected necrotizing infection, SJS/TEN, eczema herpeticum, meningococcal)
+  - ⏳ **Routine Secondary Care / Teledermatology Advice & Guidance (A&G)**
+  - 🟢 **Primary Care Manageable (NICE CKS / PCDS Pathways)**
+
+### 📋 Standardised Lesion / Rash Description (Morphology & Nomenclature)
+Teach the clinician how to describe this finding using standardized dermatological terminology:
+- **Primary Lesion Morphology:** (Exact descriptor: Macule, Patch, Papule, Plaque, Nodule, Wheal, Vesicle, Bulla, Pustule, Cyst, Purpura)
+- **Secondary Changes:** (Scale [e.g. micaceous, collarette, greasy], Crust, Lichenification, Erosion, Ulceration, Excoriation, Fissure, Atrophy)
+- **Configuration & Arrangement:** (Annular, Linear, Grouped/Herpetiform, Targetoid, Guttate, Reticular, Confluent, Discrete)
+- **Colour & Pigmentation:** (Erythematous, Violaceous, Dark Brown, Salmon-Pink, Slate-Grey, Ashen; note skin tone variation)
+- **Borders & Margins:** (Well-circumscribed vs Poorly defined, active advancing border, notched or irregular)
+- **Distribution & Body Site:** (Anatomical location, flexural vs extensor, photo-distributed, acral, symmetrical vs asymmetrical)
+- **Surface & Palpation:** (Smooth, hyperkeratotic/verrucous, indurated, soft, compressible, fluctuant)
+
+### 🔬 Dermoscopy Pattern Analysis (Dermatoscope Findings)
+- **Two-Step Algorithm Step 1:** Melanocytic vs Non-Melanocytic features.
+- **Specific Dermoscopy Structures:**
+  - Pigment network (typical vs atypical/broadened, abrupt cut-off)
+  - Dots & Globules (central, regular vs peripheral, atypical clumping)
+  - Streaks / Pseudopods / Radial streaming (melanoma horizontal growth phase)
+  - Blue-white veil & Regression structures (peppering, white scar-like patches)
+  - Vascular structures (arborizing [BCC], hairpin [seborrhoeic keratosis], dotted [psoriasis/clear cell], polymorphous [melanoma])
+  - Non-melanocytic clues (milia-like cysts, comedo-like openings, cerebriform pattern, leaf-like areas, spoke wheels)
+- **Glasgow 7-Point Checklist (NICE NG12 Melanoma Screening):**
+  - Major Criteria (2 points each): 1. Change in size/new lesion; 2. Irregular shape/border; 3. Irregular colour.
+  - Minor Criteria (1 point each): 4. Diameter >= 7mm; 5. Inflammation; 6. Oozing/crusting; 7. Sensation change.
+  - **Total Glasgow Score:** X/10 (Score >= 3 warrants 2WW referral).
+- **ABCDE Assessment:** Asymmetry, Border irregularity, Colour variegation, Diameter (>6mm), Evolution.
+
+### 🎯 Differential Diagnoses (Ranked by Probability)
+1. **[Diagnosis 1]** (Estimated Likelihood: High)
+   - Supporting features from image/history: ...
+   - Features arguing against: ...
+2. **[Diagnosis 2]** (Estimated Likelihood: Moderate)
+   - Supporting features: ...
+   - Distinguishing clues: ...
+3. **[Diagnosis 3]** (Estimated Likelihood: Consider / Rare)
+   - Clinical context: ...
+
+### 🚩 Red Flags & "Not to Miss" Exclusions
+- Explicitly list serious conditions ruled in or out (e.g. Nodular or Amelanotic Melanoma, Invasive SCC, Atypical Spitz, Cutaneous Vasculitis, SJS, Eczema Herpeticum).
+
+### 💊 Evidence-Based GP Management Protocol (BAD & NICE CKS)
+- **First-Line Pharmacotherapy:** Exact UK formulary drug names, vehicle (ointment vs cream), potency (e.g. mild Hydrocortisone 1%, moderate Betnovate-RD / Eumovate, potent Betnovate / Elocon, very potent Dermovate), dosing, and application frequency.
+- **Second-Line / Adjunct Therapy:** Calcineurin inhibitors (Protopic/Elidel), oral options, keratolytics.
+- **Non-Pharmacological & Barrier Care:** Emollient regimens (e.g. 50/50 Liquid Paraffin, Epaderm, Hydromol), trigger elimination, clothing advice.
+- **Investigations to Consider:** Skin scrapings for fungal microscopy/culture, bacterial swabs, serology, serial clinical photography.
+- **Safety-Netting & Follow-up:** Specific review timeframe (e.g. 2–4 weeks) and exact symptoms triggering urgent return.
+
+### 📋 Formatted Teledermatology & Consultation Note (e-RS Ready)
+\`\`\`text
+[SITE & CLINICAL PRESENTATION]
+Location: ... | Duration: ... | Symptoms: ...
+MORPHOLOGY & INSPECTION: ...
+DERMOSCOPY (if applicable): ...
+7-POINT CHECKLIST / 2WW ASSESSMENT: ...
+WORKING IMPRESSION: ...
+PRIMARY CARE PLAN / REFERRAL QUESTION: ...
+\`\`\`
+
+### 📚 Traceable Clinical Evidence & Guidelines
+- Hyperlinked citations to British Association of Dermatologists (BAD), Primary Care Dermatology Society (PCDS), NICE Clinical Knowledge Summaries (CKS), and DermNet NZ.`;
+
+        const symptomsStr = Array.isArray(clinicalData?.symptoms) && clinicalData.symptoms.length > 0 
+          ? clinicalData.symptoms.join(', ') 
+          : 'None specified';
+
+        userPrompt = `Dermatology Image & Case Analysis Request:
+- Presentation Type: ${clinicalData?.lesionType || 'Skin Rash / Lesion'}
+- Anatomical Location: ${clinicalData?.site || 'Not specified'}
+- Patient Age: ${clinicalData?.patientAge ? `${clinicalData.patientAge} years old` : 'Adult'}
+- Duration & Course: ${clinicalData?.duration || 'Not specified'}
+- Associated Symptoms: ${symptomsStr}
+- Skin Phototype / Heritage: ${clinicalData?.skinType || 'Not specified'}
+${clinicalData?.userNotes ? `- Clinician's Clinical Notes / Suspicions: "${clinicalData.userNotes}"\n` : ''}
+${clinicalData?.sampleImageDescription ? `- Clinical Visual Description / Preset: "${clinicalData.sampleImageDescription}"\n` : ''}
+${prompt ? `- Clinician Question: "${prompt}"\n` : ''}
+
+Please analyze the uploaded image(s) or clinical scenario thoroughly. Generate the complete evidence-based report detailing how to describe the lesion/rash using standard nomenclature, the dermoscopy pattern breakdown, ranked differentials, 2WW cancer triage, primary care management, and copyable e-RS consultation note.`;
+        break;
+      }
+
       case 'chat': {
         const isAddNoteRequest = /\b(add|add\s+in|include|note\s+down|insert|put\s+in|record)\b/i.test(prompt || '');
 
@@ -992,6 +1095,33 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         data: primaryFileBuffer,
         mediaType: primaryFileMime,
       });
+    }
+
+    // Multimodal Vision support for Dermatology Photo Analysis
+    if (action === 'analyze_derm_photo') {
+      const incomingImages: string[] = [];
+      if (Array.isArray(images) && images.length > 0) {
+        incomingImages.push(...images);
+      } else if (fileData && typeof fileData === 'string' && fileData.startsWith('data:image/')) {
+        incomingImages.push(fileData);
+      }
+
+      for (const imgStr of incomingImages) {
+        try {
+          const comma = imgStr.indexOf(',');
+          const raw = comma !== -1 ? imgStr.slice(comma + 1) : imgStr;
+          const cleanB64 = raw.replace(/[\r\n\s]/g, '');
+          const buf = Buffer.from(cleanB64, 'base64');
+          if (buf.length > 50) {
+            contentParts.push({
+              type: 'image',
+              image: buf,
+            });
+          }
+        } catch (imgErr) {
+          console.warn('Failed to parse uploaded derm image:', imgErr);
+        }
+      }
     }
 
     // Resilient Streaming Pipeline with automatic multi-model fallback chain

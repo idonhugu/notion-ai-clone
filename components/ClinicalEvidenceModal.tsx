@@ -23,6 +23,7 @@ import {
   BookmarkCheck,
   ChevronRight,
   Flame,
+  Eye,
 } from 'lucide-react';
 import { CLINICAL_CALCULATORS, ClinicalCalculator } from '@/lib/clinicalCalculators';
 import { updateDocument, fetchDocumentById } from '@/lib/api/documents';
@@ -297,6 +298,18 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
               >
                 <Flame className="w-3.5 h-3.5 text-amber-500" />
                 <span>Quick Pathways</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent('notion:open_derm_evidence_modal'));
+                }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md transition font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                title="Derm AI: Upload photos & analyse rashes/lesions"
+              >
+                <Eye className="w-3.5 h-3.5 text-rose-500" />
+                <span className="hidden md:inline">Derm Photos</span>
               </button>
             </div>
 

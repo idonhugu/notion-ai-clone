@@ -21,6 +21,7 @@ import {
   RefreshCw,
   BookOpen,
   ShieldAlert,
+  Eye,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -368,6 +369,24 @@ export function Sidebar({
           </div>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-semibold">
             NICE / ICB
+          </span>
+        </button>
+
+        {/* Derm Evidence & Photo Analysis */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('notion:open_derm_evidence_modal'));
+            setIsMobileOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition font-medium"
+          title="Derm AI & Photo Evidence Analyzer (Cmd+Shift+D)"
+        >
+          <div className="flex items-center gap-2">
+            <Eye className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+            <span>Derm Evidence & Photos</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-semibold">
+            BAD / 2WW
           </span>
         </button>
 
