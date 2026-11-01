@@ -58,6 +58,23 @@ export async function extractTextFromDataUrl(
       return '';
     }
 
+    // Word Document (.docx / Office Open XML)
+    const isDocx =
+      (fileName && fileName.toLowerCase().endsWith('.docx')) ||
+      detectedMime.includes('wordprocessingml') ||
+      (buffer.length >= 4 && buffer.slice(0, 4).toString() === 'PK\x03\x04');
+
+    if (isDocx) {
+      try {
+        const docxText = extractTextFromDocxBuffer(buffer);
+        if (docxText && docxText.trim().length > 15) {
+          return cleanExtractedText(docxText);
+        }
+      } catch (err) {
+        console.warn('Docx extraction notice:', err);
+      }
+    }
+
     // Text / Markdown / CSV / JSON / Code
     const text = buffer.toString('utf-8');
     return cleanExtractedText(text);
@@ -154,4 +171,51 @@ function cleanExtractedText(text: string): string {
     return cleaned.slice(0, 35000) + '\n\n[... Document truncated for AI context ...]';
   }
   return cleaned;
+}
+
+/**
+ * Extracts plain text from Word .docx archives by locating word/document.xml
+ * and inflating the deflate stream with Node.js built-in zlib.
+ */
+function extractTextFromDocxBuffer(buffer: Buffer): string {
+  try {
+    let offset = 0;
+    while (offset < buffer.length - 30) {
+      if (buffer.readUInt32LE(offset) !== 0x04034b50) {
+        break; // End of zip local headers
+      }
+
+      const compression = buffer.readUInt16LE(offset + 8);
+      const compressedSize = buffer.readUInt32LE(offset + 18);
+      const fileNameLen = buffer.readUInt16LE(offset + 26);
+      const extraLen = buffer.readUInt16LE(offset + 28);
+      const entryName = buffer.toString('utf-8', offset + 30, offset + 30 + fileNameLen);
+      const dataStart = offset + 30 + fileNameLen + extraLen;
+
+      if (entryName === 'word/document.xml' && dataStart + compressedSize <= buffer.length) {
+        const compressedData = buffer.slice(dataStart, dataStart + compressedSize);
+        let xmlString = '';
+        if (compression === 8) {
+          xmlString = zlib.inflateRawSync(compressedData).toString('utf-8');
+        } else if (compression === 0) {
+          xmlString = compressedData.toString('utf-8');
+        }
+
+        if (xmlString) {
+          const texts: string[] = [];
+          const textTagRegex = /<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/g;
+          let m: RegExpExecArray | null;
+          while ((m = textTagRegex.exec(xmlString)) !== null) {
+            if (m[1]) texts.push(m[1]);
+          }
+          return texts.join(' ');
+        }
+      }
+
+      offset = dataStart + compressedSize;
+    }
+  } catch (err) {
+    console.warn('Docx parser notice:', err);
+  }
+  return '';
 }

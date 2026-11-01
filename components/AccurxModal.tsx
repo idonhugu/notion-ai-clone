@@ -272,6 +272,15 @@ export function AccurxModal({
     return '';
   }, [aiStreamedOutput]);
 
+  // Extract verified NHS PIL URL from streamed AI response
+  const extractedPilUrl = useMemo(() => {
+    if (!aiStreamedOutput) return '';
+    const match =
+      aiStreamedOutput.match(/https?:\/\/(?:www\.)?(?:nhs\.uk|patient\.info)[^\s\)\>\]]+/i) ||
+      aiStreamedOutput.match(/https?:\/\/[^\s\)\>\]]+/i);
+    return match ? match[0].replace(/[.,;]$/, '') : '';
+  }, [aiStreamedOutput]);
+
   const handleCopyAiSms = () => {
     const textToCopy = parsedAiSms || aiStreamedOutput;
     if (typeof window !== 'undefined' && textToCopy) {
@@ -320,7 +329,7 @@ ${aiStreamedOutput}
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="relative w-full max-w-5xl h-[92vh] max-h-[880px] bg-white dark:bg-[#1c1c1c] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col overflow-hidden text-neutral-900 dark:text-neutral-100 font-sans">
         {/* MODAL HEADER */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/50 shrink-0">
@@ -554,9 +563,9 @@ ${aiStreamedOutput}
                           </a>
                         </div>
 
-                        {/* SMS Text Box */}
+                        {/* SMS Text Box with Linkified URLs */}
                         <div className="p-3 rounded-lg bg-neutral-50 dark:bg-[#181818] border border-neutral-200/70 dark:border-neutral-800/80 font-sans text-xs text-neutral-800 dark:text-neutral-200 leading-relaxed whitespace-pre-wrap select-all">
-                          {finalSmsText}
+                          {renderTextWithClickableLinks(finalSmsText)}
                         </div>
 
                         {/* Safety Netting & Red Flags info */}
@@ -569,19 +578,33 @@ ${aiStreamedOutput}
 
                         {/* Action Buttons */}
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-neutral-100 dark:border-neutral-800/60">
-                          <button
-                            type="button"
-                            onClick={() => handleCopyNote(snippet)}
-                            className="text-[11px] font-medium text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 flex items-center gap-1 transition"
-                            title="Copy consultation record entry for EMIS / SystmOne"
-                          >
-                            {isNoteCopied ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-500" />
-                            ) : (
-                              <FileText className="w-3.5 h-3.5" />
-                            )}
-                            <span>{isNoteCopied ? 'Note Copied!' : 'Copy EHR Note'}</span>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyNote(snippet)}
+                              className="text-[11px] font-medium text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 flex items-center gap-1 transition"
+                              title="Copy consultation record entry for EMIS / SystmOne"
+                            >
+                              {isNoteCopied ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <FileText className="w-3.5 h-3.5" />
+                              )}
+                              <span>{isNoteCopied ? 'Note Copied!' : 'Copy EHR Note'}</span>
+                            </button>
+
+                            {/* Direct Open Leaflet Link */}
+                            <a
+                              href={snippet.pilUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/40 transition"
+                              title={`Open ${snippet.pilTitle} on NHS.uk`}
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Open Leaflet</span>
+                            </a>
+                          </div>
 
                           <div className="flex items-center gap-2">
                             {onInsertIntoPage && (
@@ -763,6 +786,19 @@ ${aiStreamedOutput}
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {extractedPilUrl && (
+                        <a
+                          href={extractedPilUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition"
+                          title="Open verified NHS leaflet in new tab"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open NHS Leaflet</span>
+                        </a>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleCopyAiSms}
@@ -793,9 +829,10 @@ ${aiStreamedOutput}
                     </div>
                   </div>
 
-                  <div className="text-xs font-sans leading-relaxed text-neutral-800 dark:text-neutral-200 prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                    {aiStreamedOutput}
-                  </div>
+                  <div
+                    className="text-xs font-sans leading-relaxed text-neutral-800 dark:text-neutral-200 space-y-2.5"
+                    dangerouslySetInnerHTML={{ __html: formatAccurxHtml(aiStreamedOutput) }}
+                  />
                 </div>
               )}
             </div>
@@ -821,4 +858,71 @@ ${aiStreamedOutput}
       </div>
     </div>
   );
+}
+
+// Convert plain text into React elements with clickable links
+function renderTextWithClickableLinks(text: string): React.ReactNode {
+  if (!text) return '';
+  const urlRegex = /(https?:\/\/[^\s\)\>\]]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      const cleanUrl = part.replace(/[.,;]$/, '');
+      return (
+        <a
+          key={i}
+          href={cleanUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-700 cursor-pointer inline-flex items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span>{part}</span>
+          <ExternalLink className="w-2.5 h-2.5 inline" />
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
+// Sanitized HTML formatter for AI-streamed Accurx output with clickable links and badges
+function formatAccurxHtml(rawMarkdown: string): string {
+  if (!rawMarkdown) return '';
+
+  let html = rawMarkdown
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Format code blocks (SMS message & EHR snippet)
+  html = html.replace(
+    /```(?:text)?\n([\s\S]*?)\n```/g,
+    '<div class="my-2.5 p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/80 font-sans text-xs text-blue-950 dark:text-blue-200 select-all leading-relaxed whitespace-pre-wrap">$1</div>'
+  );
+
+  // Format Headings
+  html = html.replace(/^### (.*$)/gim, '<h3 class="text-xs font-bold text-blue-700 dark:text-blue-300 mt-3.5 mb-1 flex items-center gap-1.5">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 class="text-sm font-bold text-neutral-900 dark:text-neutral-100 mt-4 mb-2">$1</h2>');
+
+  // Format bold
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-neutral-900 dark:text-neutral-100">$1</strong>');
+
+  // Format markdown links [Label](url) as clickable badges
+  html = html.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-100/80 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-semibold hover:underline text-[11px] transition cursor-pointer">$1 ↗</a>'
+  );
+
+  // Format bare URLs not already in href
+  html = html.replace(
+    /(?<!href=")(https?:\/\/[^\s\)\>\]]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-700 inline-flex items-center gap-0.5">$1 ↗</a>'
+  );
+
+  // Format bullet items
+  html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start gap-2 my-1"><span class="text-blue-500 font-bold">&bull;</span><span>$1</span></div>');
+
+  return html;
 }

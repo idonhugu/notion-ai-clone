@@ -34,7 +34,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
       items: [
         { keys: ['Cmd', 'Shift', 'A'], desc: 'Open Accurx SMS Snippet Library & Generator (NHS PILs)' },
         { keys: ['Cmd', 'Shift', 'D'], desc: 'Open Derm Evidence: photo analysis & lesion description' },
-        { keys: ['Cmd', 'U'], desc: 'Analyze & Sync Guideline PDF into Common Presentations' },
+        { keys: ['Cmd', 'U'], desc: 'Analyze & Sync Guidelines, Slides & Conferences into Common Presentations' },
         { keys: ['Cmd', 'I'], desc: "Open Stockley's Drug Interactions Checker" },
         { keys: ['Cmd', 'E'], desc: 'Open Heidi Evidence Decision Support & Calculators' },
         { keys: ['Cmd', 'J'], desc: 'Open AI Copilot Chat sidecar' },

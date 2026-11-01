@@ -52,11 +52,16 @@ export function PdfGuidelineModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload & File State
+  const [inputTab, setInputTab] = useState<'upload' | 'paste'>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Direct Lecture / Conference Transcript Paste State
+  const [pastedLectureNotes, setPastedLectureNotes] = useState<string>('');
+  const [conferenceTopic, setConferenceTopic] = useState<string>('');
 
   // Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -127,6 +132,8 @@ export function PdfGuidelineModal({
       setSelectedBullets({});
       setApplySuccess(null);
       setSearchFilter('');
+      setPastedLectureNotes('');
+      setConferenceTopic('');
     }
   }, [isOpen]);
 
@@ -145,8 +152,21 @@ export function PdfGuidelineModal({
 
   const handleFileChange = (file: File) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf') && !file.type.includes('pdf')) {
-      setAnalysisError('Please upload a PDF document (.pdf)');
+    const lower = file.name.toLowerCase();
+    const isValidDoc =
+      lower.endsWith('.pdf') ||
+      lower.endsWith('.docx') ||
+      lower.endsWith('.doc') ||
+      lower.endsWith('.txt') ||
+      lower.endsWith('.md') ||
+      lower.endsWith('.pptx') ||
+      file.type.includes('pdf') ||
+      file.type.includes('text') ||
+      file.type.includes('word') ||
+      file.type.includes('presentation');
+
+    if (!isValidDoc) {
+      setAnalysisError('Please upload a PDF, Word (.docx), Presentation (.pptx), Markdown, or Text file.');
       return;
     }
 
@@ -167,6 +187,86 @@ export function PdfGuidelineModal({
       setAnalysisError('Failed to read the selected file.');
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzePastedNotes = async () => {
+    if (!pastedLectureNotes || pastedLectureNotes.trim().length < 25) {
+      setAnalysisError('Please paste at least 25 characters of lecture notes, slides, or transcript text.');
+      return;
+    }
+
+    const docName = conferenceTopic.trim() || 'Conference Lecture Notes & Transcript';
+    setFileName(docName);
+    setFileSize(pastedLectureNotes.length);
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+    setApplySuccess(null);
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'analyze_pdf_for_presentation',
+          prompt: pastedLectureNotes,
+          fileName: docName,
+          fileType: 'text/plain',
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server returned ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.result) {
+        throw new Error(data.error || 'AI did not return structured clinical findings.');
+      }
+
+      const result: AnalyzedPresentationResult = data.result;
+      const rawSections = (result && (result.sections || (result as any))) || {};
+      const safeSections: ExtractedClinicalSections = {
+        history: Array.isArray(rawSections.history) ? rawSections.history : [],
+        examination: Array.isArray(rawSections.examination) ? rawSections.examination : [],
+        investigations: Array.isArray(rawSections.investigations) ? rawSections.investigations : [],
+        differentials: Array.isArray(rawSections.differentials) ? rawSections.differentials : [],
+        rare: Array.isArray(rawSections.rare) ? rawSections.rare : [],
+        plan: Array.isArray(rawSections.plan) ? rawSections.plan : [],
+        safetynetting: Array.isArray(rawSections.safetynetting) ? rawSections.safetynetting : [],
+        followup: Array.isArray(rawSections.followup) ? rawSections.followup : [],
+        referral: Array.isArray(rawSections.referral) ? rawSections.referral : [],
+        clinicalPearls: Array.isArray(rawSections.clinicalPearls) ? rawSections.clinicalPearls : [],
+      };
+      result.sections = safeSections;
+      setAnalysisResult(result);
+
+      if (Array.isArray(data.presentations) && data.presentations.length > 0) {
+        setPresentations(data.presentations);
+      }
+
+      if (result.matchedPresentationId) {
+        setSelectedPresentationId(result.matchedPresentationId);
+      } else {
+        setSelectedPresentationId('__create_new__');
+      }
+
+      const initialChecked: Record<string, Record<number, boolean>> = {};
+      SECTION_DEFINITIONS.forEach((def) => {
+        const items = result.sections[def.key] || [];
+        initialChecked[def.key] = {};
+        items.forEach((_, idx) => {
+          initialChecked[def.key][idx] = true;
+        });
+      });
+      setSelectedBullets(initialChecked);
+    } catch (err: any) {
+      console.error('Lecture notes analysis error:', err);
+      setAnalysisError(err.message || 'Failed to analyze lecture text. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleAnalyzePdf = async (dataUrl: string, name: string, size: number) => {
@@ -426,7 +526,7 @@ export function PdfGuidelineModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="relative w-full max-w-4xl h-[92vh] max-h-[860px] bg-white dark:bg-[#1c1c1c] rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col overflow-hidden text-neutral-900 dark:text-neutral-100 font-sans">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-neutral-200/80 dark:border-neutral-800 flex items-center justify-between bg-neutral-50/80 dark:bg-neutral-900/60">
@@ -437,14 +537,14 @@ export function PdfGuidelineModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
-                  PDF Guideline Sync & Common Presentations Analyzer
+                  Guidelines & Conference Intelligence Analyzer
                 </h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-700/60">
-                  AI Clinical Extraction
+                  NICE CKS & CPD Intelligence
                 </span>
               </div>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                Upload clinical guideline PDFs (NICE, BTS, ICB, Trust) to automatically map and update your 180+ Common Presentations
+                Upload clinical PDFs, Word docs, slides, or paste conference lecture notes & transcripts to automatically map into your 180+ Common Presentations
               </p>
             </div>
           </div>
@@ -460,50 +560,131 @@ export function PdfGuidelineModal({
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* STEP 1: Upload Dropzone if no file selected or want to switch */}
+          {/* STEP 1: Upload Dropzone or Paste Tab if no file selected or want to switch */}
           {!analysisResult && !isAnalyzing && (
             <div className="space-y-4">
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    handleFileChange(e.dataTransfer.files[0]);
-                  }
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition flex flex-col items-center justify-center ${
-                  isDragging
-                    ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-950/20'
-                    : 'border-neutral-300 dark:border-neutral-700 hover:border-purple-400 dark:hover:border-purple-600 bg-neutral-50/40 dark:bg-neutral-900/30'
-                }`}
-              >
-                <div className="w-14 h-14 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 flex items-center justify-center mb-3 shadow-xs">
-                  <UploadCloud className="w-7 h-7" />
-                </div>
-                <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-                  Select or Drop Clinical Guideline PDF Here
-                </h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-md">
-                  Upload any medical PDF (e.g. Adult Asthma, Recurrent UTI, Paediatric Constipation, Osteoarthritis, Dermatology pathway).
-                </p>
-                <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-sm transition">
+              {/* Tab Selector: Upload File vs Paste Lecture Notes */}
+              <div className="flex items-center gap-2 border-b border-neutral-200/80 dark:border-neutral-800 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setInputTab('upload')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    inputTab === 'upload'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  <span>Upload Document (PDF / Word / Slides)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInputTab('paste')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    inputTab === 'paste'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>Browse PDF File</span>
-                </span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => e.target.files?.[0] && handleFileChange(e.target.files[0])}
-                  className="hidden"
-                />
+                  <span>Paste Lecture Notes / Conference Transcript</span>
+                </button>
               </div>
+
+              {inputTab === 'upload' ? (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileChange(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition flex flex-col items-center justify-center ${
+                    isDragging
+                      ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-950/20'
+                      : 'border-neutral-300 dark:border-neutral-700 hover:border-purple-400 dark:hover:border-purple-600 bg-neutral-50/40 dark:bg-neutral-900/30'
+                  }`}
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 flex items-center justify-center mb-3 shadow-xs">
+                    <UploadCloud className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                    Select or Drop Clinical Document / Guideline Here
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-md">
+                    Upload medical PDFs, Word documents (.docx), presentation slides (.pptx), markdown, or text files (e.g. NICE Guidelines, ICB Formularies, Conference Handouts).
+                  </p>
+                  <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-sm transition">
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Browse Document File</span>
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt,.md,.pptx,application/pdf"
+                    onChange={(e) => e.target.files?.[0] && handleFileChange(e.target.files[0])}
+                    className="hidden"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3.5 p-4 rounded-2xl bg-neutral-50/60 dark:bg-neutral-900/40 border border-neutral-200 dark:border-neutral-800">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Conference / Lecture Topic & Speaker (Optional):
+                    </label>
+                    <input
+                      type="text"
+                      value={conferenceTopic}
+                      onChange={(e) => setConferenceTopic(e.target.value)}
+                      placeholder="e.g. Essential Dermatology Conference: Dermatology in Skin of Color - Dr. Farah Mahmood"
+                      className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-[#202020] border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                        Paste Lecture Notes, Zoom Transcript, or Slides Content:
+                      </label>
+                      <span className="text-[11px] text-neutral-400">
+                        {pastedLectureNotes.length} characters
+                      </span>
+                    </div>
+                    <textarea
+                      rows={9}
+                      value={pastedLectureNotes}
+                      onChange={(e) => setPastedLectureNotes(e.target.value)}
+                      placeholder="Paste conference lecture notes, slides text, Zoom transcripts, CPD seminar notes, or clinical guidelines here... (e.g. Essential Dermatology Conference lecture by Dr. Farah Mahmood on Dermatology in Skin of Color, hair loss, GLP-1 agonists, eczema, acne, or skin cancer)..."
+                      className="w-full p-3 rounded-xl text-xs font-sans leading-relaxed bg-white dark:bg-[#202020] border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Claude Opus 5.5 synthesizes high-yield clinical pearls & maps to Common Presentations</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAnalyzePastedNotes}
+                      disabled={pastedLectureNotes.trim().length < 25}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-semibold transition shadow-sm"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Analyze Conference Intelligence</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Sample high-yield suggestions */}
               <div className="p-4 rounded-xl bg-neutral-100/70 dark:bg-neutral-800/50 border border-neutral-200/60 dark:border-neutral-700/60 text-xs text-neutral-600 dark:text-neutral-300">
@@ -511,10 +692,10 @@ export function PdfGuidelineModal({
                   💡 How this updates your GP Common Presentations:
                 </span>
                 <ul className="list-disc pl-4 space-y-1 text-neutral-500 dark:text-neutral-400">
-                  <li>AI reads the guideline text, clinical tables, and primary care pathways.</li>
-                  <li>Automatically identifies the matching condition in your 180+ Common Presentations catalog.</li>
-                  <li>Extracts actionable BNF drug doses, diagnostic thresholds, red flags, and referral criteria.</li>
-                  <li>Merges points directly under standard headings (Plan, Investigations, Referral) without overwriting existing notes!</li>
+                  <li>AI reads clinical guidelines, conference slides, or lecture transcripts (e.g. RCGP One Day Essentials, BAD, PCDS).</li>
+                  <li>Extracts expert nuances: atypical signs in pigmented skin, medication-induced issues (e.g. GLP-1 hair shedding), subtle red flags.</li>
+                  <li>Automatically identifies the matching condition in your 180+ Common Presentations catalog or creates a new presentation page.</li>
+                  <li>Merges points directly under standard headings (Plan, Investigations, Referral, Clinical Pearls) without overwriting existing notes!</li>
                 </ul>
               </div>
             </div>

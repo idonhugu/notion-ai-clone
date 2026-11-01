@@ -195,7 +195,18 @@ export function DocumentAttachments({
       {visibleFiles.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {visibleFiles.map((file) => {
-            const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type.includes('pdf');
+            const lowerName = file.name.toLowerCase();
+            const isPdf = lowerName.endsWith('.pdf') || file.type.includes('pdf');
+            const isClinicalSyncable =
+              isPdf ||
+              lowerName.endsWith('.docx') ||
+              lowerName.endsWith('.doc') ||
+              lowerName.endsWith('.txt') ||
+              lowerName.endsWith('.md') ||
+              lowerName.endsWith('.pptx') ||
+              file.type.includes('word') ||
+              file.type.includes('text') ||
+              file.type.includes('presentation');
 
             return (
               <div
@@ -258,7 +269,7 @@ export function DocumentAttachments({
                     <span>Notes</span>
                   </button>
 
-                  {isPdf && (
+                  {isClinicalSyncable && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -267,7 +278,7 @@ export function DocumentAttachments({
                         );
                       }}
                       className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/60 dark:border-emerald-800/60 transition shadow-2xs"
-                      title="Analyze this guideline PDF and sync into Common Presentations"
+                      title="Analyze this guideline or conference document and sync into Common Presentations"
                     >
                       <Stethoscope className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                       <span>Sync to Pres</span>

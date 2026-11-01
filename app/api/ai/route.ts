@@ -573,38 +573,45 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
         processedDocText = `${head}\n\n[... middle sections omitted for length ...]\n\n${tail}`;
       }
 
-      const matchSystemPrompt = `You are a Senior NHS General Practice Medical Editor and Clinical Decision Support Specialist.
-You are analyzing a clinical guideline document (file: "${fileName || 'Clinical Guideline.pdf'}").
-Your mission is to analyze the guideline, match it to the most appropriate condition among our 180+ GP Common Presentations knowledge base, and extract comprehensive, consultation-ready medical intelligence.
+      const matchSystemPrompt = `You are a Senior NHS General Practice Medical Editor and Clinical CPD Education Specialist.
+You are analyzing a clinical guideline, conference lecture transcript, CPD symposium notes, seminar slides, or expert primary care document (Source/File: "${fileName || 'Clinical Document / Conference Notes'}").
+Your mission is to analyze the material, match it to the most appropriate condition among our 180+ GP Common Presentations knowledge base, and extract comprehensive, consultation-ready medical intelligence.
+
+DOCUMENT TYPE RECOGNITION:
+The document may be:
+- An official Clinical Guideline (NICE, CKS, BTS/SIGN, BAD, PCDS, ICB, Trust pathway)
+- A Conference Lecture, Symposium, or Webinar (e.g. RCGP One Day Essentials, BMJ Masterclasses, Primary Care Dermatology Society, CPD seminar notes, or transcribed audio/slides)
+- Specialist teaching notes, clinical audits, or expert consensus papers
 
 OUR GP COMMON PRESENTATIONS CATALOG:
 ${catalogSummary}
 
 INSTRUCTIONS:
-1. MATCHING:
+1. MATCHING & TARGET PRESENTATION:
    - Identify which existing Common Presentation is the best match. Select its exact title, ID, and icon from the catalog.
-   - If the guideline covers multiple topics or doesn't match an existing title closely (e.g. "Psoriatic Arthritis" or "Paediatric Food Allergy"), you can specify "matchedPresentationId": null, and suggest a concise title and appropriate medical emoji icon.
-   - Provide a 1-2 sentence "matchReason" explaining the clinical link.
+   - If the material covers a major standalone topic or cross-cutting area (e.g. "Dermatology in Skin of Color", "Hair Loss & GLP-1 Agonists", "Primary Care Dermoscopy", "Paediatric Food Allergy"), you can specify "matchedPresentationId": null, and suggest a concise title and appropriate medical emoji icon to create a brand-new presentation!
+   - Provide a 1-2 sentence "matchReason" explaining the clinical link or why this should be a new presentation.
    - Rate confidence: "high" (direct 1:1 match), "medium" (covers related area), or "low" (novel condition).
    - "suggestedAction": "merge" (if existing match found) or "create" (if new condition).
 
 2. CLINICAL INTELLIGENCE EXTRACTION:
    Extract high-yield clinical recommendations strictly relevant to UK Primary Care General Practice (NICE CKS / RCGP standard).
+   Pay special attention to conference pearls, expert diagnostic subtleties, atypical presentations, and demographic considerations (such as skin of color variations, subtle red flags, drug-induced etiologies, and prescribing nuances).
    Categorize into:
    - "history": Key diagnostic questions, symptom characteristics, risk factors, screening criteria, and red flags.
-   - "examination": Physical examination steps, vital sign thresholds, specific clinical tests, and physical red flags.
-   - "investigations": Point-of-care / bedside tests, primary care bloods with diagnostic thresholds, sputum/urine tests, and imaging indications.
+   - "examination": Physical examination steps, vital sign thresholds, specific clinical tests, and physical red flags (including pigmentary and morphological variations across Fitzpatrick skin phototypes I-VI).
+   - "investigations": Point-of-care / bedside tests, primary care bloods with diagnostic thresholds, sputum/urine tests, dermoscopy clues, and imaging indications.
    - "differentials": Key common and alternative differential diagnoses mentioned or implied.
    - "rare": Life-threatening emergencies, occult malignancies, acute complications, or not-to-miss mimics.
    - "plan": Actionable primary care management! Include exact UK British National Formulary (BNF) drug names, specific dosages, frequencies, treatment durations, first-line vs second-line, and non-pharmacological/lifestyle measures.
    - "safetynetting": Explicit red-flag warning signs and patient instructions on when to seek urgent emergency care.
    - "followup": Planned review timeframes, monitoring bloods, intervals, and criteria for stopping/stepping down therapy.
    - "referral": Specific thresholds for 2-Week Wait (2WW) suspected cancer referral, emergency same-day admission, and routine outpatient specialist clinic referral.
-   - "clinicalPearls": Practical clinical tips, local formulary quirks, diagnostic pearls, or common prescribing pitfalls highlighted in the text.
+   - "clinicalPearls": Practical clinical tips, lecture pearls, diagnostic pearls (e.g. erythema masked as violaceous/slate-grey in pigmented skin, GLP-1 hair loss, fungal vs eczema traps), or prescribing nuances highlighted in the material.
 
 3. METADATA:
-   - "guidelineTitle": Official title of the guideline/document (e.g. "NICE NG198: Acne Vulgaris" or "British Thoracic Society Adult Asthma Guideline 2024").
-   - "issuingAuthority": Organization (e.g. "NICE", "BTS / SIGN", "RCGP", "NHS England", "Local ICB / Trust").
+   - "guidelineTitle": Official title of the guideline or conference lecture (e.g. "Essential Dermatology: Dermatology in Skin of Color - Dr. Farah Mahmood" or "NICE NG198: Acne Vulgaris").
+   - "issuingAuthority": Organization, Conference, or Speaker (e.g. "RCGP Essential Dermatology Conference / Dr. Farah Mahmood", "NICE CKS", "British Association of Dermatologists", "BMJ Masterclass").
 
 OUTPUT FORMAT:
 Return strictly a valid JSON object matching this schema. Do NOT include markdown code fences (\`\`\`json) or conversational prose:

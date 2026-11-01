@@ -362,17 +362,17 @@ export function Sidebar({
         <button
           onClick={() => {
             window.dispatchEvent(new CustomEvent('notion:open_pdf_guideline_modal'));
-            setIsMobileOpen(false);
+            setTimeout(() => setIsMobileOpen(false), 80);
           }}
           className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition font-medium"
-          title="Analyze PDF & Sync to Common Presentations (Cmd+U)"
+          title="Analyze Guidelines, Slides & Conferences into Common Presentations (Cmd+U)"
         >
           <div className="flex items-center gap-2">
             <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>Sync Guideline PDF</span>
+            <span>Guidelines & Conferences</span>
           </div>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-semibold">
-            NICE / ICB
+            NICE / CPD
           </span>
         </button>
 
@@ -380,7 +380,7 @@ export function Sidebar({
         <button
           onClick={() => {
             window.dispatchEvent(new CustomEvent('notion:open_derm_evidence_modal'));
-            setIsMobileOpen(false);
+            setTimeout(() => setIsMobileOpen(false), 80);
           }}
           className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition font-medium"
           title="Derm AI & Photo Evidence Analyzer (Cmd+Shift+D)"
@@ -398,14 +398,14 @@ export function Sidebar({
         <button
           onClick={() => {
             window.dispatchEvent(new CustomEvent('notion:open_accurx_modal'));
-            setIsMobileOpen(false);
+            setTimeout(() => setIsMobileOpen(false), 80);
           }}
           className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition font-medium"
           title="Accurx & SMS Snippets with Verified NHS PILs (Cmd+Shift+A)"
         >
           <div className="flex items-center gap-2">
             <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            <span>Accurx SMS Library</span>
+            <span>Accurx SMS & Leaflets</span>
           </div>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-semibold">
             NHS PILs

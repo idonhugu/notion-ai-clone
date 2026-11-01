@@ -173,9 +173,9 @@ export function TopNav({
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+      <div className="flex items-center gap-1 sm:gap-1.5 max-w-full overflow-x-auto no-scrollbar py-0.5 flex-shrink-0">
         {/* Word count pill */}
-        <div className="hidden md:flex items-center gap-1 px-2 py-1 rounded text-[11px] text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition select-none">
+        <div className="hidden md:flex items-center gap-1 px-2 py-1 rounded text-[11px] text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition select-none flex-shrink-0">
           <Clock className="w-3 h-3" />
           <span>{wordCount} words • {readingTime} min read</span>
         </div>
@@ -183,7 +183,7 @@ export function TopNav({
         {/* Ask AI Copilot button with active state & gradient accent */}
         <button
           onClick={onToggleSidecar || onOpenAI}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition shadow-sm ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition shadow-sm flex-shrink-0 ${
             isSidecarOpen
               ? 'bg-purple-600 text-white shadow-purple-500/20 shadow-md'
               : 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60'
@@ -198,7 +198,7 @@ export function TopNav({
         {onOpenEvidence && (
           <button
             onClick={onOpenEvidence}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/60 dark:border-emerald-800/60 transition shadow-xs"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/60 dark:border-emerald-800/60 transition shadow-xs flex-shrink-0"
             title="Open Clinical Evidence & Decision Support (Cmd+E)"
           >
             <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -210,7 +210,7 @@ export function TopNav({
         {onOpenInteractions && (
           <button
             onClick={onOpenInteractions}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200/60 dark:border-amber-800/60 transition shadow-xs"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200/60 dark:border-amber-800/60 transition shadow-xs flex-shrink-0"
             title="Open Stockley's Drug Interactions Checker (Cmd+I)"
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -218,15 +218,16 @@ export function TopNav({
           </button>
         )}
 
-        {/* PDF Guideline Sync & Common Presentations Analyzer */}
+        {/* Guidelines & Conference Intelligence Analyzer */}
         {onOpenPdfGuideline && (
           <button
             onClick={onOpenPdfGuideline}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 transition shadow-xs"
-            title="Analyze PDF & Sync into Common Presentations (Cmd+U)"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 transition shadow-xs flex-shrink-0"
+            title="Analyze Guidelines, Slides & Conferences into Common Presentations (Cmd+U)"
           >
             <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span className="hidden md:inline">Sync PDF</span>
+            <span className="hidden lg:inline">Guidelines & Conferences</span>
+            <span className="inline lg:hidden text-[11px]">Sync</span>
           </button>
         )}
 
@@ -234,7 +235,7 @@ export function TopNav({
         {onOpenDermEvidence && (
           <button
             onClick={onOpenDermEvidence}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200/60 dark:border-rose-800/60 transition shadow-xs"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200/60 dark:border-rose-800/60 transition shadow-xs flex-shrink-0"
             title="Derm AI & Photo Analysis (Cmd+Shift+D)"
           >
             <Eye className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
@@ -246,11 +247,12 @@ export function TopNav({
         {onOpenAccurx && (
           <button
             onClick={onOpenAccurx}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/60 dark:border-blue-800/60 transition shadow-xs"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/60 dark:border-blue-800/60 transition shadow-xs flex-shrink-0"
             title="Accurx & SMS Snippets Library with NHS PILs (Cmd+Shift+A)"
           >
             <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span className="hidden sm:inline">Accurx SMS</span>
+            <span className="inline sm:hidden text-[11px]">SMS</span>
           </button>
         )}
 
@@ -402,6 +404,108 @@ export function TopNav({
                   {isFullWidth ? 'ON' : 'OFF'}
                 </span>
               </button>
+
+              <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800 my-1" />
+
+              {/* Clinical AI Decision Support Tools */}
+              <div className="px-1.5 py-1 text-[10px] uppercase font-bold text-neutral-400">
+                Clinical Tools
+              </div>
+
+              {onOpenAccurx && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenAccurx();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-700 dark:text-blue-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Accurx SMS Library & PILs</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                    SMS
+                  </span>
+                </button>
+              )}
+
+              {onOpenPdfGuideline && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenPdfGuideline();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    <span>Guidelines & Conferences</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
+                    Sync
+                  </span>
+                </button>
+              )}
+
+              {onOpenInteractions && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenInteractions();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Stockley&apos;s Interactions</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+                    BNF
+                  </span>
+                </button>
+              )}
+
+              {onOpenEvidence && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenEvidence();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Clinical Evidence & Decision</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                    Heidi
+                  </span>
+                </button>
+              )}
+
+              {onOpenDermEvidence && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenDermEvidence();
+                    setIsMoreOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300 transition text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                    <span>Derm AI & Photos</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded font-semibold bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300">
+                    BAD
+                  </span>
+                </button>
+              )}
 
               <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800 my-1" />
 
