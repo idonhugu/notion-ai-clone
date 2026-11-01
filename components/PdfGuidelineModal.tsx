@@ -379,7 +379,8 @@ export function PdfGuidelineModal({
   const handleAnalyzePdfWithImages = async (
     images: string[],
     name: string,
-    size: number
+    size: number,
+    isRetry = false
   ) => {
     setIsAnalyzing(true);
     setAnalysisError(null);
@@ -395,13 +396,21 @@ export function PdfGuidelineModal({
           images,
           fileName: name,
           fileType: 'application/pdf',
+          fastMode: isRetry,
         }),
       });
 
       if (!res.ok) {
+        if (res.status === 504 && !isRetry) {
+          setAnalysisProgressMessage('Switching to high-speed Gemini Flash engine to prevent timeout...');
+          return handleAnalyzePdfWithImages(images, name, size, true);
+        }
+
         let errorMsg = `Server returned ${res.status}`;
         if (res.status === 413) {
           errorMsg = `Server returned 413: Slide images exceeded size limit. Please try pasting notes or uploading a smaller set of slides.`;
+        } else if (res.status === 504) {
+          errorMsg = `The server took too long to analyze all slides. Please click below to paste notes or try again with fast mode.`;
         } else {
           const errJson = await res.json().catch(() => ({}));
           if (errJson.error) errorMsg = errJson.error;
@@ -428,7 +437,8 @@ export function PdfGuidelineModal({
     text: string,
     name: string,
     fileType: string,
-    size: number
+    size: number,
+    isRetry = false
   ) => {
     setIsAnalyzing(true);
     setAnalysisError(null);
@@ -444,13 +454,21 @@ export function PdfGuidelineModal({
           prompt: text,
           fileName: name,
           fileType: fileType || 'text/plain',
+          fastMode: isRetry,
         }),
       });
 
       if (!res.ok) {
+        if (res.status === 504 && !isRetry) {
+          setAnalysisProgressMessage('Switching to high-speed Gemini Flash engine to prevent timeout...');
+          return handleAnalyzeExtractedText(text, name, fileType, size, true);
+        }
+
         let errorMsg = `Server returned ${res.status}`;
         if (res.status === 413) {
           errorMsg = `Server returned 413 (Payload Too Large): Extracted text is too large for AI context. Try analyzing a section or chapter.`;
+        } else if (res.status === 504) {
+          errorMsg = `The server took too long to analyze this document. Please click below to paste lecture notes or try again.`;
         } else {
           const errJson = await res.json().catch(() => ({}));
           if (errJson.error) errorMsg = errJson.error;

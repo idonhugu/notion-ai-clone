@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
       condition,
       characterTarget,
       patientContext,
+      fastMode = false,
     } = await req.json();
 
     // Verified active Google Gemini API key provided by user (base64 encoded to protect push integrity)
@@ -580,9 +581,9 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
 
       // Truncate cleanly if document is massive while preserving beginning, middle, and end
       let processedDocText = guidelineText;
-      if (processedDocText.length > 40000) {
-        const head = processedDocText.slice(0, 20000);
-        const tail = processedDocText.slice(-15000);
+      if (processedDocText.length > 25000) {
+        const head = processedDocText.slice(0, 15000);
+        const tail = processedDocText.slice(-10000);
         processedDocText = `${head}\n\n[... middle sections omitted for length ...]\n\n${tail}`;
       }
 
@@ -702,19 +703,34 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
           ];
         }
 
-        const claudeRes = await generateClaudeText({
-          model: CLAUDE_MODELS.OPUS,
-          system: matchSystemPrompt,
-          messages: claudeMessages,
-          maxTokens: 8192,
-          temperature: 0.1,
-        });
-        if (claudeRes && claudeRes.trim().length > 0) {
-          aiJsonOutput = claudeRes;
+        // Rapid Clinical Intelligence: Attempt Claude Sonnet 5.5 with a strict 4.5s budget,
+        // or bypass directly to Gemini Flash if fastMode is requested
+        if (!fastMode) {
+          const claudePromise = generateClaudeText({
+            model: CLAUDE_MODELS.SONNET,
+            system: matchSystemPrompt,
+            messages: claudeMessages,
+            maxTokens: 3500,
+            temperature: 0.1,
+          });
+
+          // 4.5s race ensures the response finishes well before Vercel's 10s gateway timeout
+          const timeoutPromise = new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), 4500)
+          );
+
+          const claudeRes = await Promise.race([claudePromise, timeoutPromise]).catch((err) => {
+            claudePdfError = err?.message || String(err);
+            return null;
+          });
+
+          if (claudeRes && typeof claudeRes === 'string' && claudeRes.trim().length > 0) {
+            aiJsonOutput = claudeRes;
+          }
         }
       } catch (claudeErr: any) {
         claudePdfError = claudeErr?.message || String(claudeErr);
-        console.warn('Claude Opus notice on PDF guideline analysis, falling back to Gemini:', claudePdfError);
+        console.warn('Claude notice on guideline analysis, falling back to Gemini:', claudePdfError);
       }
 
       // 2. Gemini fallback if Claude did not return
@@ -786,27 +802,38 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
           .trim();
         parsedResult = JSON.parse(clean);
       } catch (firstParseErr) {
-        // Attempt lightweight recovery for truncated JSON output
+        // Robust recovery for LLM syntax defects (missing opening quotes on keys, unclosed braces, trailing commas)
         try {
-          const clean = aiJsonOutput
+          let clean = aiJsonOutput
             .replace(/^```json\s*/i, '')
             .replace(/^```\s*/i, '')
             .replace(/\s*```$/i, '')
             .trim();
 
-          const lastObjEnd = clean.lastIndexOf('}');
-          if (lastObjEnd !== -1) {
-            let candidate = clean.slice(0, lastObjEnd + 1);
-            const openBrackets = (candidate.match(/\[/g) || []).length;
-            const closeBrackets = (candidate.match(/\]/g) || []).length;
-            const openBraces = (candidate.match(/\{/g) || []).length;
-            const closeBraces = (candidate.match(/\}/g) || []).length;
+          // 1. Repair missing opening quote on keys (e.g. issuingAuthority": -> "issuingAuthority":)
+          clean = clean.replace(/([{\n,]\s*)(?!")([a-zA-Z0-9_]+)":/g, '$1"$2":');
+          clean = clean.replace(/([{\n,]\s*)(?!")([a-zA-Z0-9_]+):/g, '$1"$2":');
+          // 2. Remove trailing commas
+          clean = clean.replace(/,(\s*[}\]])/g, '$1');
 
-            for (let b = 0; b < openBrackets - closeBrackets; b++) candidate += ']';
-            for (let b = 0; b < openBraces - closeBraces; b++) candidate += '}';
+          try {
+            parsedResult = JSON.parse(clean);
+          } catch {
+            // 3. Repair truncated braces / brackets
+            const lastObjEnd = clean.lastIndexOf('}');
+            if (lastObjEnd !== -1) {
+              let candidate = clean.slice(0, lastObjEnd + 1);
+              const openBrackets = (candidate.match(/\[/g) || []).length;
+              const closeBrackets = (candidate.match(/\]/g) || []).length;
+              const openBraces = (candidate.match(/\{/g) || []).length;
+              const closeBraces = (candidate.match(/\}/g) || []).length;
 
-            parsedResult = JSON.parse(candidate);
-            console.log('Successfully repaired and recovered truncated JSON for guideline analysis.');
+              for (let b = 0; b < openBrackets - closeBrackets; b++) candidate += ']';
+              for (let b = 0; b < openBraces - closeBraces; b++) candidate += '}';
+
+              parsedResult = JSON.parse(candidate);
+              console.log('Successfully repaired and recovered truncated JSON for guideline analysis.');
+            }
           }
         } catch (repairErr) {
           console.warn('JSON repair failed:', repairErr);
