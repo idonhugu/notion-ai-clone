@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromDataUrl } from '@/lib/documentParser';
 import { formatPresentationTitle } from '@/lib/titleFormatter';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { streamClaude, generateClaudeText, CLAUDE_MODELS } from '@/lib/claudeClient';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -287,21 +288,38 @@ Return a valid JSON object matching this schema:
 Return ONLY valid JSON. Do not include markdown code fences or conversational prose.`;
 
       let generatedJson = '';
-      for (const modelId of CANDIDATE_MODELS) {
-        try {
-          const res = await generateText({
-            model: google(modelId),
-            prompt: clinicalPrompt,
-            temperature: 0.2,
-            providerOptions,
-            maxRetries: 0,
-          });
-          if (res.text && res.text.trim().length > 0) {
-            generatedJson = res.text;
-            break;
+      // 1. Complex Medical Reasoning: Execute on Claude Opus 5.5
+      try {
+        const claudeRes = await generateClaudeText({
+          model: CLAUDE_MODELS.OPUS,
+          messages: [{ role: 'user', content: clinicalPrompt }],
+          temperature: 0.2,
+        });
+        if (claudeRes && claudeRes.trim().length > 0) {
+          generatedJson = claudeRes;
+        }
+      } catch (claudeErr: any) {
+        console.warn('Claude Opus notice for clinical presentation, falling back to Gemini:', claudeErr?.message || claudeErr);
+      }
+
+      // 2. Gemini fallback if Claude did not return
+      if (!generatedJson) {
+        for (const modelId of CANDIDATE_MODELS) {
+          try {
+            const res = await generateText({
+              model: google(modelId),
+              prompt: clinicalPrompt,
+              temperature: 0.2,
+              providerOptions,
+              maxRetries: 0,
+            });
+            if (res.text && res.text.trim().length > 0) {
+              generatedJson = res.text;
+              break;
+            }
+          } catch (err) {
+            console.warn(`generateText notice on ${modelId} for clinical presentation:`, err);
           }
-        } catch (err) {
-          console.warn(`generateText notice on ${modelId} for clinical presentation:`, err);
         }
       }
 
@@ -614,21 +632,39 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
 }`;
 
       let aiJsonOutput = '';
-      for (const modelId of CANDIDATE_MODELS) {
-        try {
-          const res = await generateText({
-            model: google(modelId),
-            prompt: `${matchSystemPrompt}\n\nCLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
-            temperature: 0.1,
-            providerOptions,
-            maxRetries: 0,
-          });
-          if (res.text && res.text.trim().length > 0) {
-            aiJsonOutput = res.text;
-            break;
+      // 1. Complex Medical Reasoning: Execute on Claude Opus 5.5
+      try {
+        const claudeRes = await generateClaudeText({
+          model: CLAUDE_MODELS.OPUS,
+          system: matchSystemPrompt,
+          messages: [{ role: 'user', content: `CLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""` }],
+          temperature: 0.1,
+        });
+        if (claudeRes && claudeRes.trim().length > 0) {
+          aiJsonOutput = claudeRes;
+        }
+      } catch (claudeErr: any) {
+        console.warn('Claude Opus notice on PDF guideline analysis, falling back to Gemini:', claudeErr?.message || claudeErr);
+      }
+
+      // 2. Gemini fallback if Claude did not return
+      if (!aiJsonOutput) {
+        for (const modelId of CANDIDATE_MODELS) {
+          try {
+            const res = await generateText({
+              model: google(modelId),
+              prompt: `${matchSystemPrompt}\n\nCLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
+              temperature: 0.1,
+              providerOptions,
+              maxRetries: 0,
+            });
+            if (res.text && res.text.trim().length > 0) {
+              aiJsonOutput = res.text;
+              break;
+            }
+          } catch (err) {
+            console.warn(`generateText notice on ${modelId} for PDF guideline analysis:`, err);
           }
-        } catch (err) {
-          console.warn(`generateText notice on ${modelId} for PDF guideline analysis:`, err);
         }
       }
 
@@ -1182,7 +1218,97 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
       }
     }
 
-    // Resilient Streaming Pipeline with automatic multi-model fallback chain
+    // -------------------------------------------------------------
+    // INTELLIGENT MODEL ROUTING (Medical vs Non-Medical Split):
+    // 1. Complex Medical Reasoning (Deep Logic, Audits, Logic) -> Claude Opus 5.5
+    // 2. Everyday Clinical Tasks (Formatting, Summaries, Accurx SMS) -> Claude Sonnet 5.5
+    // 3. Non-Medical Everyday Tasks (Quick Document Summaries, General Notes, Rewrites) -> Google Gemini 2.5 Flash
+    // -------------------------------------------------------------
+    const isExplicitlyMedicalAction =
+      action === 'clinical_evidence' ||
+      action === 'stockleys_checker' ||
+      action === 'analyze_derm_photo' ||
+      action === 'generate_accurx_sms';
+
+    const isMedicalContent =
+      isExplicitlyMedicalAction ||
+      /\b(patient|symptom|symptoms|diagnosis|differentials|nice|cks|bnf|prescrib|treatment|guideline|hypertension|asthma|rash|lesion|ecg|blood test|consultation|referral|dose|antibiotic|infection|dermoscopy|haematology|cardiology|paediatric)\b/i.test(
+        `${prompt || ''} ${context || ''} ${documentTitle || ''}`
+      );
+
+    if (isMedicalContent) {
+      // Split as specified in user architecture:
+      // - Everyday Tasks (Formatting, Accurx SMS, Routine Summaries) -> Claude Sonnet 5.5
+      // - Complex Reasoning (Deep Logic, Audits, Evidence, Interactions, Dermoscopy) -> Claude Opus 5.5
+      const targetClaudeModel =
+        action === 'generate_accurx_sms'
+          ? CLAUDE_MODELS.SONNET
+          : CLAUDE_MODELS.OPUS;
+
+      const claudeContentParts: any[] = [];
+
+      // Multimodal vision blocks for Claude Opus if derm photos are attached
+      if (action === 'analyze_derm_photo') {
+        const incomingImages: string[] = [];
+        if (Array.isArray(images) && images.length > 0) {
+          incomingImages.push(...images);
+        } else if (fileData && typeof fileData === 'string' && fileData.startsWith('data:image/')) {
+          incomingImages.push(fileData);
+        }
+
+        for (const imgStr of incomingImages) {
+          try {
+            let mediaType = 'image/jpeg';
+            if (imgStr.startsWith('data:image/png')) mediaType = 'image/png';
+            else if (imgStr.startsWith('data:image/webp')) mediaType = 'image/webp';
+            else if (imgStr.startsWith('data:image/gif')) mediaType = 'image/gif';
+
+            const comma = imgStr.indexOf(',');
+            const raw = comma !== -1 ? imgStr.slice(comma + 1) : imgStr;
+            const cleanB64 = raw.replace(/[\r\n\s]/g, '');
+            if (cleanB64.length > 50) {
+              claudeContentParts.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: cleanB64,
+                },
+              });
+            }
+          } catch (imgErr) {
+            console.warn('Failed to parse uploaded derm image for Claude:', imgErr);
+          }
+        }
+      }
+
+      claudeContentParts.push({
+        type: 'text',
+        text: userPrompt,
+      });
+
+      try {
+        console.log(`Executing medical task on ${targetClaudeModel} (Action: ${action})`);
+        const claudeStream = await streamClaude({
+          model: targetClaudeModel,
+          system: systemInstruction,
+          messages: [{ role: 'user', content: claudeContentParts }],
+          temperature: 0.7,
+        });
+
+        return new Response(claudeStream, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-AI-Engine': targetClaudeModel,
+          },
+        });
+      } catch (claudeErr: any) {
+        console.warn(`${targetClaudeModel} streaming notice, falling back to Google Gemini:`, claudeErr?.message || claudeErr);
+      }
+    }
+
+    // Non-Medical Tasks & Fallback Pipeline (Google Gemini 2.5 Flash)
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
