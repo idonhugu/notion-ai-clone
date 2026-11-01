@@ -13,6 +13,7 @@ import {
   FolderOpen,
   Stethoscope,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { createDocument, updateDocument } from '@/lib/api/documents';
@@ -20,9 +21,15 @@ import { Document } from '@/lib/types';
 
 interface SubPagesListProps {
   currentDocId: string;
+  onSubpagesCountChange?: (count: number) => void;
+  onClose?: () => void;
 }
 
-export function SubPagesList({ currentDocId }: SubPagesListProps) {
+export function SubPagesList({
+  currentDocId,
+  onSubpagesCountChange,
+  onClose,
+}: SubPagesListProps) {
   const [subpages, setSubpages] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -38,6 +45,9 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
           const data = await res.json();
           if (isMounted && Array.isArray(data)) {
             setSubpages(data);
+            if (onSubpagesCountChange) {
+              onSubpagesCountChange(data.length);
+            }
           }
         }
       } catch (err) {
@@ -137,6 +147,17 @@ export function SubPagesList({ currentDocId }: SubPagesListProps) {
             )}
             <span>New Sub-page</span>
           </button>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition ml-1"
+              title="Hide sub-pages section"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 

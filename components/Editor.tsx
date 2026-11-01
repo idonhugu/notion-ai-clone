@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
-import { FileText, Kanban, Sparkles } from 'lucide-react';
+import { FileText, Kanban, Sparkles, FolderOpen, Folder } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { updateDocument, createDocument } from '@/lib/api/documents';
 import { CoverImage } from './CoverImage';
@@ -69,6 +69,45 @@ export default function Editor({
   const [selectedChatDoc, setSelectedChatDoc] = useState<AttachedFile | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
+
+  // On-demand Sub-pages & OneDrive Folders/PDFs sections
+  const hasExistingAttachments = React.useMemo(
+    () => (attachments || []).some((f) => f.id !== '__kanban__' && f.id !== '__page_style__'),
+    [attachments]
+  );
+  const [isAttachmentsEnabled, setIsAttachmentsEnabled] = useState(hasExistingAttachments);
+  const [isSubpagesEnabled, setIsSubpagesEnabled] = useState(false);
+  const [subpagesCount, setSubpagesCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (hasExistingAttachments) {
+      setIsAttachmentsEnabled(true);
+    }
+  }, [hasExistingAttachments]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function checkSubpages() {
+      try {
+        const res = await fetch(`/api/documents?parent_id=${doc.id}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data)) {
+            setSubpagesCount(data.length);
+            if (data.length > 0) {
+              setIsSubpagesEnabled(true);
+            }
+          }
+        }
+      } catch {}
+    }
+    if (doc.id) {
+      checkSubpages();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [doc.id]);
 
   // Inline & Floating AI states
   const [showInlineAI, setShowInlineAI] = useState(false);
@@ -959,6 +998,10 @@ export default function Editor({
         onOpenDermEvidence={openDermEvidence}
         onOpenAccurx={openAccurx}
         onOpenPatientExplainer={openPatientExplainer}
+        isSubpagesEnabled={isSubpagesEnabled}
+        onToggleSubpages={() => setIsSubpagesEnabled((prev) => !prev)}
+        isAttachmentsEnabled={isAttachmentsEnabled}
+        onToggleAttachments={() => setIsAttachmentsEnabled((prev) => !prev)}
       />
 
       {/* Cover Image banner */}
@@ -1121,22 +1164,63 @@ export default function Editor({
               </div>
 
               {/* Nested Sub-pages Section (Documents within notes) */}
-              <SubPagesList currentDocId={doc.id} />
+              {isSubpagesEnabled && (
+                <SubPagesList
+                  currentDocId={doc.id}
+                  onSubpagesCountChange={(count) => {
+                    setSubpagesCount(count);
+                    if (count > 0) setIsSubpagesEnabled(true);
+                  }}
+                  onClose={() => setIsSubpagesEnabled(false)}
+                />
+              )}
 
               {/* Document & PDF Attachments with AI Tools */}
-              <DocumentAttachments
-                files={attachments}
-                onUpdateFiles={(newFiles) => {
-                  setAttachments(newFiles);
-                  saveDocument({ attachments: newFiles });
-                }}
-                onInsertIntoPage={handleInsertAIMarkdown}
-                onCreateSubpageWithNotes={handleCreateSubpageWithNotes}
-                onChatWithDocument={(file) => {
-                  setSelectedChatDoc(file);
-                  setIsSidecarOpen(true);
-                }}
-              />
+              {isAttachmentsEnabled && (
+                <DocumentAttachments
+                  files={attachments}
+                  onUpdateFiles={(newFiles) => {
+                    setAttachments(newFiles);
+                    saveDocument({ attachments: newFiles });
+                  }}
+                  onInsertIntoPage={handleInsertAIMarkdown}
+                  onCreateSubpageWithNotes={handleCreateSubpageWithNotes}
+                  onChatWithDocument={(file) => {
+                    setSelectedChatDoc(file);
+                    setIsSidecarOpen(true);
+                  }}
+                  onClose={() => setIsAttachmentsEnabled(false)}
+                />
+              )}
+
+              {/* Clean Notion-style on-demand add buttons when sections are closed/hidden */}
+              {(!isSubpagesEnabled || !isAttachmentsEnabled) && (
+                <div className="flex items-center gap-2 pt-4 border-t border-neutral-100 dark:border-neutral-800/60">
+                  <span className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mr-1">
+                    Add to page:
+                  </span>
+                  {!isSubpagesEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSubpagesEnabled(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-purple-600 dark:hover:text-purple-400 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 transition shadow-2xs cursor-pointer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                      <span>+ Sub-pages</span>
+                    </button>
+                  )}
+                  {!isAttachmentsEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAttachmentsEnabled(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-blue-600 dark:hover:text-blue-400 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 transition shadow-2xs cursor-pointer"
+                    >
+                      <Folder className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>+ Folders & PDFs</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

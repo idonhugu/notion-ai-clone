@@ -62,6 +62,10 @@ interface TopNavProps {
   onOpenDermEvidence?: () => void;
   onOpenAccurx?: () => void;
   onOpenPatientExplainer?: () => void;
+  isSubpagesEnabled?: boolean;
+  onToggleSubpages?: () => void;
+  isAttachmentsEnabled?: boolean;
+  onToggleAttachments?: () => void;
 }
 
 export function TopNav({
@@ -91,6 +95,10 @@ export function TopNav({
   onOpenDermEvidence,
   onOpenAccurx,
   onOpenPatientExplainer,
+  isSubpagesEnabled = false,
+  onToggleSubpages,
+  isAttachmentsEnabled = false,
+  onToggleAttachments,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -422,6 +430,46 @@ export function TopNav({
                   {isFullWidth ? 'ON' : 'OFF'}
                 </span>
               </button>
+
+              {/* Sub-pages section toggle */}
+              {onToggleSubpages && (
+                <button
+                  type="button"
+                  onClick={onToggleSubpages}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+                >
+                  <span>Sub-pages section</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isSubpagesEnabled
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                        : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                    }`}
+                  >
+                    {isSubpagesEnabled ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+              )}
+
+              {/* OneDrive Folders & Files toggle */}
+              {onToggleAttachments && (
+                <button
+                  type="button"
+                  onClick={onToggleAttachments}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+                >
+                  <span>Folders & PDFs</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isAttachmentsEnabled
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                        : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                    }`}
+                  >
+                    {isAttachmentsEnabled ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+              )}
 
               <div className="h-[1px] bg-neutral-100 dark:bg-neutral-800 my-1" />
 

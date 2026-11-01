@@ -28,6 +28,7 @@ import {
   UploadCloud,
   Check,
   Palette,
+  X,
 } from 'lucide-react';
 import { AttachedFile } from '@/lib/types';
 export type { AttachedFile };
@@ -54,6 +55,7 @@ interface DocumentAttachmentsProps {
   onInsertIntoPage?: (markdown: string) => void;
   onCreateSubpageWithNotes?: (title: string, markdown: string) => void;
   onChatWithDocument?: (doc: AttachedFile) => void;
+  onClose?: () => void;
 }
 
 export function DocumentAttachments({
@@ -63,6 +65,7 @@ export function DocumentAttachments({
   onInsertIntoPage,
   onCreateSubpageWithNotes,
   onChatWithDocument,
+  onClose,
 }: DocumentAttachmentsProps) {
   // Navigation & View State
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -406,6 +409,17 @@ export function DocumentAttachments({
             >
               <Plus className="w-3.5 h-3.5" />
               <span>{currentFolder ? `Upload to ${currentFolder.name}` : 'Upload PDF'}</span>
+            </button>
+          )}
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+              title="Hide OneDrive folders & files"
+            >
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
