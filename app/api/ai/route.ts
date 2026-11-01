@@ -4,7 +4,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractTextFromDataUrl } from '@/lib/documentParser';
 import { formatPresentationTitle } from '@/lib/titleFormatter';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { streamClaude, generateClaudeText, CLAUDE_MODELS } from '@/lib/claudeClient';
+import {
+  streamClaude,
+  generateClaudeText,
+  CLAUDE_MODELS,
+  isClaudeTokenOrCreditError,
+  formatClaudeFallbackBanner,
+} from '@/lib/claudeClient';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -288,6 +294,7 @@ Return a valid JSON object matching this schema:
 Return ONLY valid JSON. Do not include markdown code fences or conversational prose.`;
 
       let generatedJson = '';
+      let claudePresError: string | null = null;
       // 1. Complex Medical Reasoning: Execute on Claude Opus 5.5
       try {
         const claudeRes = await generateClaudeText({
@@ -299,7 +306,8 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
           generatedJson = claudeRes;
         }
       } catch (claudeErr: any) {
-        console.warn('Claude Opus notice for clinical presentation, falling back to Gemini:', claudeErr?.message || claudeErr);
+        claudePresError = claudeErr?.message || String(claudeErr);
+        console.warn('Claude Opus notice for clinical presentation, falling back to Gemini:', claudePresError);
       }
 
       // 2. Gemini fallback if Claude did not return
@@ -479,7 +487,11 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
         }
 
         // Return structured markdown response with clickable links and clinical summary
-        let responseMarkdown = `✅ **Created Clinical Presentation Page:**\n\n`;
+        let responseMarkdown = '';
+        if (claudePresError) {
+          responseMarkdown += formatClaudeFallbackBanner(claudePresError, 'Claude Opus 5.5');
+        }
+        responseMarkdown += `✅ **Created Clinical Presentation Page:**\n\n`;
         for (const doc of createdDocs) {
           responseMarkdown += `${doc.icon || '🩺'} [${doc.title}](/doc/${doc.id})\n\n`;
           responseMarkdown += `*(Added as active subpage and linked in your clinical index under section **${doc.title.charAt(0).toUpperCase()}**)*\n\n`;
@@ -639,6 +651,7 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
 }`;
 
       let aiJsonOutput = '';
+      let claudePdfError: string | null = null;
       // 1. Complex Medical Reasoning: Execute on Claude Opus 5.5
       try {
         const claudeRes = await generateClaudeText({
@@ -651,7 +664,8 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
           aiJsonOutput = claudeRes;
         }
       } catch (claudeErr: any) {
-        console.warn('Claude Opus notice on PDF guideline analysis, falling back to Gemini:', claudeErr?.message || claudeErr);
+        claudePdfError = claudeErr?.message || String(claudeErr);
+        console.warn('Claude Opus notice on PDF guideline analysis, falling back to Gemini:', claudePdfError);
       }
 
       // 2. Gemini fallback if Claude did not return
@@ -694,6 +708,11 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
           success: true,
           result: parsedResult,
           presentations: presentationsList,
+          fallbackNotice: claudePdfError
+            ? (isClaudeTokenOrCreditError(claudePdfError)
+                ? 'Claude token/quota limit reached. Reverted seamlessly to Google Gemini for this guideline analysis.'
+                : 'Claude notice: Reverted seamlessly to Google Gemini for this guideline analysis.')
+            : null,
         });
       } catch (parseErr) {
         console.error('Failed to parse guideline analysis JSON:', parseErr, aiJsonOutput);
@@ -1294,7 +1313,11 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
     // 1. Complex Medical Reasoning (Deep Logic, Audits, Logic) -> Claude Opus 5.5
     // 2. Everyday Clinical Tasks (Formatting, Summaries, Accurx SMS) -> Claude Sonnet 5.5
     // 3. Non-Medical Everyday Tasks (Quick Document Summaries, General Notes, Rewrites) -> Google Gemini 2.5 Flash
+    // 4. Automatic Token/Quota Fallback: If Claude tokens run out, revert to Gemini with prominent notice
     // -------------------------------------------------------------
+    let usedClaudeFallback = false;
+    let claudeFallbackBanner = '';
+
     const isExplicitlyMedicalAction =
       action === 'clinical_evidence' ||
       action === 'stockleys_checker' ||
@@ -1376,6 +1399,9 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
           },
         });
       } catch (claudeErr: any) {
+        usedClaudeFallback = true;
+        const modelLabel = targetClaudeModel === CLAUDE_MODELS.OPUS ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5';
+        claudeFallbackBanner = formatClaudeFallbackBanner(claudeErr, modelLabel);
         console.warn(`${targetClaudeModel} streaming notice, falling back to Google Gemini:`, claudeErr?.message || claudeErr);
       }
     }
@@ -1385,8 +1411,14 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
 
     const stream = new ReadableStream({
       async start(controller) {
-        let streamedChars = 0;
+        let modelGeneratedChars = 0;
         const executionErrors: string[] = [];
+
+        // USER REQUIREMENT: "if i run out of tokens please revert back to gemini but let me know if this happens"
+        // If Claude hit token limits or quota, notify the user with a prominent markdown banner at the top of output
+        if (usedClaudeFallback && claudeFallbackBanner) {
+          controller.enqueue(encoder.encode(claudeFallbackBanner));
+        }
 
         // 1. Attempt streaming across candidate models (fastest first)
         for (const modelId of CANDIDATE_MODELS) {
@@ -1408,12 +1440,12 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
 
             for await (const chunk of result.textStream) {
               if (chunk) {
-                streamedChars += chunk.length;
+                modelGeneratedChars += chunk.length;
                 controller.enqueue(encoder.encode(chunk));
               }
             }
 
-            if (streamedChars > 0) {
+            if (modelGeneratedChars > 0) {
               break;
             } else {
               executionErrors.push(`${modelId} (stream returned 0 chars)`);
@@ -1422,14 +1454,14 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
             const msg = streamErr?.message || String(streamErr);
             console.warn(`streamText notice on ${modelId}:`, msg);
             executionErrors.push(`${modelId} (stream error): ${msg}`);
-            if (streamedChars > 0) {
+            if (modelGeneratedChars > 0) {
               break;
             }
           }
         }
 
         // 2. Non-streaming fallback across candidate models if streaming yielded 0 characters
-        if (streamedChars === 0) {
+        if (modelGeneratedChars === 0) {
           for (const modelId of CANDIDATE_MODELS) {
             try {
               console.log(`Executing generateText fallback with ${modelId} for action:`, action);
@@ -1444,7 +1476,7 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
 
               if (fallbackResult.text && fallbackResult.text.trim().length > 0) {
                 controller.enqueue(encoder.encode(fallbackResult.text));
-                streamedChars = fallbackResult.text.length;
+                modelGeneratedChars = fallbackResult.text.length;
                 break;
               }
             } catch (fallbackErr: any) {
@@ -1456,7 +1488,7 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         }
 
         // 3. Transparent diagnostic notice if all models failed to generate text
-        if (streamedChars === 0) {
+        if (modelGeneratedChars === 0) {
           controller.enqueue(
             encoder.encode(
               `> ⚠️ **AI Notice:** Unable to generate response for \`${fileName || 'this request'}\`.\n\n` +
@@ -1478,6 +1510,14 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
         Pragma: 'no-cache',
         Expires: '0',
+        ...(usedClaudeFallback
+          ? {
+              'X-AI-Engine': 'gemini-fallback',
+              'X-Claude-Fallback': 'true',
+            }
+          : {
+              'X-AI-Engine': 'gemini-2.5-flash',
+            }),
       },
     });
   } catch (error: any) {

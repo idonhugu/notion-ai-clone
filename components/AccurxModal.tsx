@@ -903,6 +903,12 @@ function formatAccurxHtml(rawMarkdown: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+  // Format blockquotes / alert notices (> ...)
+  html = html.replace(
+    /^&gt; (.*$)/gim,
+    '<div class="my-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs">$1</div>'
+  );
+
   // Format code blocks (SMS message & EHR snippet)
   html = html.replace(
     /```(?:text)?\n([\s\S]*?)\n```/g,

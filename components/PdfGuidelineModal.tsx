@@ -67,6 +67,7 @@ export function PdfGuidelineModal({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalyzedPresentationResult | null>(null);
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
 
   // Common Presentations Catalog
   const [presentations, setPresentations] = useState<{ id: string; title: string; icon: string | null }[]>([]);
@@ -239,6 +240,7 @@ export function PdfGuidelineModal({
       };
       result.sections = safeSections;
       setAnalysisResult(result);
+      setFallbackNotice(data.fallbackNotice || null);
 
       if (Array.isArray(data.presentations) && data.presentations.length > 0) {
         setPresentations(data.presentations);
@@ -311,6 +313,7 @@ export function PdfGuidelineModal({
       };
       result.sections = safeSections;
       setAnalysisResult(result);
+      setFallbackNotice(data.fallbackNotice || null);
 
       // If backend returned catalog of presentations, update local state
       if (Array.isArray(data.presentations) && data.presentations.length > 0) {
@@ -740,6 +743,13 @@ export function PdfGuidelineModal({
           {/* STEP 2: REVIEW & MERGE SCREEN */}
           {analysisResult && !applySuccess && (
             <div className="space-y-5 animate-in fade-in duration-150">
+              {fallbackNotice && (
+                <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2.5 shadow-2xs">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="font-medium">{fallbackNotice}</span>
+                </div>
+              )}
+
               {/* Guideline Header & Target Match Card */}
               <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800/80 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

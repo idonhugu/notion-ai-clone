@@ -98,6 +98,7 @@ export function ClinicalEvidenceModal({
   const [copiedLearningId, setCopiedLearningId] = useState<string | null>(null);
   const [insertedLearningId, setInsertedLearningId] = useState<string | null>(null);
   const [copiedAppraisal, setCopiedAppraisal] = useState(false);
+  const [aiEngineUsed, setAiEngineUsed] = useState<string>('Claude Opus 5.5');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -150,6 +151,10 @@ export function ClinicalEvidenceModal({
       if (!res.ok) {
         throw new Error(`Failed to fetch evidence (HTTP ${res.status})`);
       }
+
+      const engineHeader = res.headers.get('X-AI-Engine') || 'Claude Opus 5.5';
+      const isFallback = res.headers.get('X-Claude-Fallback') === 'true';
+      setAiEngineUsed(isFallback ? 'Gemini (Claude token fallback)' : engineHeader);
 
       if (!res.body) throw new Error('No streaming body returned');
 
@@ -591,7 +596,17 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
                       <span className="font-semibold text-neutral-800 dark:text-neutral-200">
                         Evidence Grounded:
                       </span>
-                      <span>NICE CKS, BNF 2024 & BMJ Best Practice</span>
+                      <span>NICE CKS & BNF</span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition ${
+                          aiEngineUsed.includes('fallback')
+                            ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                            : 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300'
+                        }`}
+                        title="AI clinical intelligence engine used for this report"
+                      >
+                        {aiEngineUsed}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-wrap">

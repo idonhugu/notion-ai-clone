@@ -17,6 +17,44 @@ export const CLAUDE_MODELS = {
 export const ANTHROPIC_VERSION = '2026-10-21';
 
 /**
+ * Checks whether an error is due to token exhaustion, credit limit, rate limit, or quota.
+ */
+export function isClaudeTokenOrCreditError(err: any): boolean {
+  if (!err) return false;
+  const msg = (typeof err === 'string' ? err : err?.message || String(err)).toLowerCase();
+  return (
+    msg.includes('credit') ||
+    msg.includes('balance') ||
+    msg.includes('token') ||
+    msg.includes('quota') ||
+    msg.includes('rate_limit') ||
+    msg.includes('rate limit') ||
+    msg.includes('billing') ||
+    msg.includes('overloaded') ||
+    msg.includes('429') ||
+    msg.includes('402') ||
+    msg.includes('insufficient_quota') ||
+    msg.includes('too low') ||
+    msg.includes('limit reached')
+  );
+}
+
+/**
+ * Formats a clean, prominent Markdown banner notifying the user that Claude hit a token/quota
+ * limit and the system seamlessly reverted to Google Gemini.
+ */
+export function formatClaudeFallbackBanner(err: any, targetModel: string = 'Claude'): string {
+  const errMsg = (typeof err === 'string' ? err : err?.message || '').trim();
+  const isTokenOrCredit = isClaudeTokenOrCreditError(err);
+
+  if (isTokenOrCredit) {
+    return `> ⚠️ **Notice: ${targetModel} token / credit limit reached.** Reverted seamlessly to **Google Gemini** to complete your consultation request without interruption.\n\n`;
+  }
+  const cleanSnippet = errMsg.replace(/^Claude API error \(\d+\):\s*/i, '').slice(0, 90);
+  return `> ⚠️ **Notice: ${targetModel} temporarily unavailable** (${cleanSnippet || 'Service notice'}). Reverted seamlessly to **Google Gemini** for your clinical response.\n\n`;
+}
+
+/**
  * Retrieves the verified Claude API key
  */
 export function getClaudeApiKey(): string {
@@ -58,9 +96,6 @@ export async function streamClaude(params: ClaudeCallParams): Promise<ReadableSt
 
   if (params.system) {
     payload.system = params.system;
-  }
-  if (typeof params.temperature === 'number') {
-    payload.temperature = params.temperature;
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -114,6 +149,14 @@ export async function streamClaude(params: ClaudeCallParams): Promise<ReadableSt
             try {
               const eventData = JSON.parse(jsonStr);
 
+              // Mid-stream token or quota error event
+              if (eventData.type === 'error') {
+                const errDetail = eventData.error?.message || 'Token or quota limit reached';
+                controller.enqueue(
+                  encoder.encode(`\n\n> ⚠️ **Notice: Claude token / quota reached mid-stream** (${errDetail}).\n`)
+                );
+              }
+
               // Extract text delta from streaming event
               if (
                 eventData.type === 'content_block_delta' &&
@@ -121,6 +164,16 @@ export async function streamClaude(params: ClaudeCallParams): Promise<ReadableSt
                 typeof eventData.delta.text === 'string'
               ) {
                 controller.enqueue(encoder.encode(eventData.delta.text));
+              }
+
+              // Output reached Claude maximum response token limit
+              if (
+                eventData.type === 'message_delta' &&
+                eventData.delta?.stop_reason === 'max_tokens'
+              ) {
+                controller.enqueue(
+                  encoder.encode(`\n\n> ℹ️ *Note: Claude output reached the maximum response token limit (4096 tokens).*`)
+                );
               }
             } catch {
               // Ignore malformed JSON chunks
@@ -151,9 +204,6 @@ export async function generateClaudeText(params: ClaudeCallParams): Promise<stri
 
   if (params.system) {
     payload.system = params.system;
-  }
-  if (typeof params.temperature === 'number') {
-    payload.temperature = params.temperature;
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
