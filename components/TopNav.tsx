@@ -111,9 +111,10 @@ export function TopNav({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between px-3 md:px-6 py-2.5 bg-white/90 dark:bg-[#191919]/90 backdrop-blur-md border-b border-neutral-100 dark:border-neutral-800/80 transition-colors">
-      {/* Left: Breadcrumbs & Save Indicator */}
-      <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-neutral-500 dark:text-neutral-400 min-w-0 pr-2 pl-9 md:pl-0">
+    <header className="sticky top-0 z-30 flex flex-col bg-white/90 dark:bg-[#191919]/90 backdrop-blur-md border-b border-neutral-100 dark:border-neutral-800/80 transition-colors">
+      <div className="flex items-center justify-between px-3 md:px-6 py-2">
+        {/* Left: Breadcrumbs & Save Indicator */}
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-neutral-500 dark:text-neutral-400 min-w-0 shrink pr-2 pl-9 md:pl-0">
         <Link
           href="/"
           className="hover:text-neutral-900 dark:hover:text-neutral-100 transition truncate hidden sm:inline"
@@ -563,6 +564,61 @@ export function TopNav({
             </div>
           )}
         </div>
+      </div>
+    </div>
+
+      {/* Mobile Quick Clinical Strip (< 640px) */}
+      <div className="flex sm:hidden items-center gap-1.5 px-3 py-1.5 bg-neutral-50/90 dark:bg-[#151515]/90 border-t border-neutral-100 dark:border-neutral-800/60 overflow-x-auto no-scrollbar">
+        {onOpenEvidence && (
+          <button
+            type="button"
+            onClick={onOpenEvidence}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <BookOpen className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+            <span>Evidence</span>
+          </button>
+        )}
+        {onOpenInteractions && (
+          <button
+            type="button"
+            onClick={onOpenInteractions}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <ShieldAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            <span>Interactions</span>
+          </button>
+        )}
+        {onOpenPdfGuideline && (
+          <button
+            type="button"
+            onClick={onOpenPdfGuideline}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200/80 dark:border-purple-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <FileText className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+            <span>Sync Conf/PDF</span>
+          </button>
+        )}
+        {onOpenDermEvidence && (
+          <button
+            type="button"
+            onClick={onOpenDermEvidence}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200/80 dark:border-rose-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <Eye className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+            <span>Derm AI</span>
+          </button>
+        )}
+        {onOpenAccurx && (
+          <button
+            type="button"
+            onClick={onOpenAccurx}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 dark:border-blue-800/80 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+          >
+            <Smartphone className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+            <span>Accurx SMS</span>
+          </button>
+        )}
       </div>
     </header>
   );

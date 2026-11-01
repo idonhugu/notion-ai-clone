@@ -556,7 +556,11 @@ ${aiStreamedOutput}
                             href={snippet.pilUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                            className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer pointer-events-auto"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(snippet.pilUrl, '_blank', 'noopener,noreferrer');
+                            }}
                           >
                             <span>{snippet.pilTitle}</span>
                             <ExternalLink className="w-3 h-3" />
@@ -867,7 +871,7 @@ function renderTextWithClickableLinks(text: string): React.ReactNode {
   const parts = text.split(urlRegex);
 
   return parts.map((part, i) => {
-    if (urlRegex.test(part)) {
+    if (part.startsWith('http://') || part.startsWith('https://')) {
       const cleanUrl = part.replace(/[.,;]$/, '');
       return (
         <a
@@ -875,8 +879,11 @@ function renderTextWithClickableLinks(text: string): React.ReactNode {
           href={cleanUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-700 cursor-pointer inline-flex items-center gap-0.5"
-          onClick={(e) => e.stopPropagation()}
+          className="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-700 cursor-pointer inline-flex items-center gap-0.5 pointer-events-auto"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(cleanUrl, '_blank', 'noopener,noreferrer');
+          }}
         >
           <span>{part}</span>
           <ExternalLink className="w-2.5 h-2.5 inline" />

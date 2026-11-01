@@ -31,6 +31,7 @@ import { createDocument } from '@/lib/api/documents';
 import { SearchModal } from './SearchModal';
 import { TemplatesModal, Template } from './TemplatesModal';
 import { TrashModal } from './TrashModal';
+import { useClinicalTools } from './ClinicalToolsContext';
 
 interface SidebarProps {
   documents: Document[];
@@ -61,6 +62,13 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const {
+    openEvidence,
+    openInteractions,
+    openPdfGuideline,
+    openDermEvidence,
+    openAccurx,
+  } = useClinicalTools();
 
   // Listen for Cmd+K keyboard shortcut
   useEffect(() => {
@@ -324,11 +332,12 @@ export function Sidebar({
 
         {/* Clinical Evidence (Heidi Decision Support) */}
         <button
+          type="button"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent('notion:open_evidence_modal'));
-            setTimeout(() => setIsMobileOpen(false), 80);
+            openEvidence();
+            setIsMobileOpen(false);
           }}
-          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition font-medium"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition font-medium cursor-pointer"
           title="Clinical Evidence & Decision Support (Cmd+E)"
         >
           <div className="flex items-center gap-2">
@@ -342,11 +351,12 @@ export function Sidebar({
 
         {/* Stockley's Drug Interactions Checker */}
         <button
+          type="button"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent('notion:open_stockleys_modal'));
-            setTimeout(() => setIsMobileOpen(false), 80);
+            openInteractions();
+            setIsMobileOpen(false);
           }}
-          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition font-medium"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition font-medium cursor-pointer"
           title="Stockley's Drug Interactions Checker (Cmd+I)"
         >
           <div className="flex items-center gap-2">
@@ -360,11 +370,12 @@ export function Sidebar({
 
         {/* PDF Guideline Sync & Common Presentations Analyzer */}
         <button
+          type="button"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent('notion:open_pdf_guideline_modal'));
-            setTimeout(() => setIsMobileOpen(false), 80);
+            openPdfGuideline();
+            setIsMobileOpen(false);
           }}
-          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition font-medium"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition font-medium cursor-pointer"
           title="Analyze Guidelines, Slides & Conferences into Common Presentations (Cmd+U)"
         >
           <div className="flex items-center gap-2">
@@ -378,11 +389,12 @@ export function Sidebar({
 
         {/* Derm Evidence & Photo Analysis */}
         <button
+          type="button"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent('notion:open_derm_evidence_modal'));
-            setTimeout(() => setIsMobileOpen(false), 80);
+            openDermEvidence();
+            setIsMobileOpen(false);
           }}
-          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition font-medium"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition font-medium cursor-pointer"
           title="Derm AI & Photo Evidence Analyzer (Cmd+Shift+D)"
         >
           <div className="flex items-center gap-2">
@@ -396,11 +408,12 @@ export function Sidebar({
 
         {/* Accurx / SMS Snippet Library */}
         <button
+          type="button"
           onClick={() => {
-            window.dispatchEvent(new CustomEvent('notion:open_accurx_modal'));
-            setTimeout(() => setIsMobileOpen(false), 80);
+            openAccurx();
+            setIsMobileOpen(false);
           }}
-          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition font-medium"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition font-medium cursor-pointer"
           title="Accurx & SMS Snippets with Verified NHS PILs (Cmd+Shift+A)"
         >
           <div className="flex items-center gap-2">

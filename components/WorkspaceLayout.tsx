@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
+import { ClinicalToolsProvider } from './ClinicalToolsContext';
 import { Document } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -213,20 +214,27 @@ export function WorkspaceLayout({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white dark:bg-[#191919] transition-colors">
-      <Sidebar
-        documents={documents}
-        onDocumentCreated={handleDocumentCreated}
-        onDocumentDeleted={handleDocumentArchived}
-        onRestoreDocument={handleRestoreDocument}
-        onPermanentDeleteDocument={handlePermanentDelete}
-        onToggleFavorite={handleToggleFavorite}
-        userEmail={userEmail}
-      />
-      <main className="flex-1 overflow-y-auto relative bg-white dark:bg-[#191919]">
-        {children}
-      </main>
-    </div>
+    <ClinicalToolsProvider
+      initialDocContext={{
+        id: initialDoc?.id || activeDocId,
+        title: initialDoc?.title || 'Untitled',
+      }}
+    >
+      <div className="flex h-screen overflow-hidden bg-white dark:bg-[#191919] transition-colors">
+        <Sidebar
+          documents={documents}
+          onDocumentCreated={handleDocumentCreated}
+          onDocumentDeleted={handleDocumentArchived}
+          onRestoreDocument={handleRestoreDocument}
+          onPermanentDeleteDocument={handlePermanentDelete}
+          onToggleFavorite={handleToggleFavorite}
+          userEmail={userEmail}
+        />
+        <main className="flex-1 overflow-y-auto relative bg-white dark:bg-[#191919]">
+          {children}
+        </main>
+      </div>
+    </ClinicalToolsProvider>
   );
 }
 

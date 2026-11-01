@@ -16,16 +16,10 @@ import { DocumentAttachments, AttachedFile } from './DocumentAttachments';
 import { AIChatSidecar } from './AIChatSidecar';
 import { KanbanBoard, KanbanCard } from './KanbanBoard';
 import { TaskProgressBar } from './TaskProgressBar';
-import { ShortcutsModal } from './ShortcutsModal';
-import { ClinicalEvidenceModal } from './ClinicalEvidenceModal';
-import { StockleysModal } from './StockleysModal';
-import { PdfGuidelineModal } from './PdfGuidelineModal';
-import { DermEvidenceModal } from './DermEvidenceModal';
-import { AccurxModal } from './AccurxModal';
-import { ErrorBoundary } from './ErrorBoundary';
 import { SubPagesList } from './SubPagesList';
 import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
+import { useClinicalTools } from './ClinicalToolsContext';
 import { Document } from '@/lib/types';
 import { NotionFontStyle, NOTION_FONTS } from '@/lib/notionStyles';
 import { sanitizeAIMarkdown, isChecklistMarkdown } from '@/lib/sanitizeAIMarkdown';
@@ -58,15 +52,19 @@ export default function Editor({
   // View state: Document Canvas vs Kanban Board
   const [activeView, setActiveView] = useState<'document' | 'board'>('document');
 
+  // Global Clinical Tools & Modals
+  const {
+    openEvidence,
+    openInteractions,
+    openPdfGuideline,
+    openDermEvidence,
+    openAccurx,
+    openShortcuts,
+    setActiveDocContext,
+  } = useClinicalTools();
+
   // AI & Sidecar states
   const [isSidecarOpen, setIsSidecarOpen] = useState(false);
-  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
-  const [isInteractionsOpen, setIsInteractionsOpen] = useState(false);
-  const [isPdfGuidelineOpen, setIsPdfGuidelineOpen] = useState(false);
-  const [isDermEvidenceOpen, setIsDermEvidenceOpen] = useState(false);
-  const [isAccurxOpen, setIsAccurxOpen] = useState(false);
-  const [preloadedPdfFile, setPreloadedPdfFile] = useState<AttachedFile | null>(null);
   const [selectedChatDoc, setSelectedChatDoc] = useState<AttachedFile | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
@@ -590,94 +588,39 @@ export default function Editor({
     }
   };
 
-  // Global keyboard shortcuts (Cmd+J for AI sidecar, Cmd+/ for shortcuts cheat sheet)
+  // Keep global clinical tools context synced with active doc
   useEffect(() => {
-    const handleGlobalShortcuts = (e: KeyboardEvent) => {
-      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+    setActiveDocContext({
+      id: doc.id,
+      title,
+      contentMarkdown: docMarkdown,
+    });
+  }, [doc.id, title, docMarkdown, setActiveDocContext]);
 
-      if (isCmdOrCtrl && e.key.toLowerCase() === 'j') {
+  // Listen for insert markdown events from global clinical tools & modals
+  useEffect(() => {
+    const handleInsertMarkdownEvent = (e: Event) => {
+      const custom = e as CustomEvent<{ markdown: string }>;
+      if (custom?.detail?.markdown) {
+        handleInsertAIMarkdown(custom.detail.markdown);
+      }
+    };
+    window.addEventListener('notion:insert_markdown', handleInsertMarkdownEvent);
+    return () => {
+      window.removeEventListener('notion:insert_markdown', handleInsertMarkdownEvent);
+    };
+  }, []);
+
+  // Cmd+J shortcut for AI Sidecar
+  useEffect(() => {
+    const handleSidecarShortcut = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setIsSidecarOpen((prev) => !prev);
       }
-
-      if (isCmdOrCtrl && e.key.toLowerCase() === 'e') {
-        e.preventDefault();
-        setIsEvidenceOpen((prev) => !prev);
-      }
-
-      if (isCmdOrCtrl && e.key.toLowerCase() === 'i') {
-        e.preventDefault();
-        setIsInteractionsOpen((prev) => !prev);
-      }
-
-      if (isCmdOrCtrl && e.key.toLowerCase() === 'u') {
-        e.preventDefault();
-        setPreloadedPdfFile(null);
-        setIsPdfGuidelineOpen((prev) => !prev);
-      }
-
-      if (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        setIsDermEvidenceOpen((prev) => !prev);
-      }
-
-      if (isCmdOrCtrl && e.shiftKey && (e.key.toLowerCase() === 'a' || e.key.toLowerCase() === 's')) {
-        e.preventDefault();
-        setIsAccurxOpen((prev) => !prev);
-      }
-
-      if (isCmdOrCtrl && e.key === '/') {
-        e.preventDefault();
-        setIsShortcutsOpen((prev) => !prev);
-      }
     };
-
-    const handleOpenPres = () => {
-      setIsSidecarOpen(true);
-    };
-
-    const handleOpenEvidence = () => {
-      setIsEvidenceOpen(true);
-    };
-
-    const handleOpenInteractions = () => {
-      setIsInteractionsOpen(true);
-    };
-
-    const handleOpenDermEvidence = () => {
-      setIsDermEvidenceOpen(true);
-    };
-
-    const handleOpenAccurx = () => {
-      setIsAccurxOpen(true);
-    };
-
-    const handleOpenPdfGuideline = (e?: Event) => {
-      const customEvent = e as CustomEvent<AttachedFile | undefined>;
-      if (customEvent?.detail) {
-        setPreloadedPdfFile(customEvent.detail);
-      } else {
-        setPreloadedPdfFile(null);
-      }
-      setIsPdfGuidelineOpen(true);
-    };
-
-    window.addEventListener('keydown', handleGlobalShortcuts);
-    window.addEventListener('notion:open_ai_presentation_modal', handleOpenPres);
-    window.addEventListener('notion:open_evidence_modal', handleOpenEvidence);
-    window.addEventListener('notion:open_stockleys_modal', handleOpenInteractions);
-    window.addEventListener('notion:open_pdf_guideline_modal', handleOpenPdfGuideline);
-    window.addEventListener('notion:open_derm_evidence_modal', handleOpenDermEvidence);
-    window.addEventListener('notion:open_accurx_modal', handleOpenAccurx);
-    return () => {
-      window.removeEventListener('keydown', handleGlobalShortcuts);
-      window.removeEventListener('notion:open_ai_presentation_modal', handleOpenPres);
-      window.removeEventListener('notion:open_evidence_modal', handleOpenEvidence);
-      window.removeEventListener('notion:open_stockleys_modal', handleOpenInteractions);
-      window.removeEventListener('notion:open_pdf_guideline_modal', handleOpenPdfGuideline);
-      window.removeEventListener('notion:open_derm_evidence_modal', handleOpenDermEvidence);
-      window.removeEventListener('notion:open_accurx_modal', handleOpenAccurx);
-    };
+    window.addEventListener('keydown', handleSidecarShortcut);
+    return () => window.removeEventListener('keydown', handleSidecarShortcut);
   }, []);
 
   // Keyboard navigation inside editor
@@ -1000,7 +943,7 @@ export default function Editor({
         isSidecarOpen={isSidecarOpen}
         onToggleSidecar={() => setIsSidecarOpen(!isSidecarOpen)}
         onDuplicate={handleDuplicatePage}
-        onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        onOpenShortcuts={openShortcuts}
         onDelete={onDelete ? () => onDelete(doc.id) : undefined}
         wordCount={wordCount}
         onExportMarkdown={handleExportMarkdown}
@@ -1009,14 +952,11 @@ export default function Editor({
         isSmallText={isSmallText}
         onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
         onManualSync={handleManualSync}
-        onOpenEvidence={() => setIsEvidenceOpen(true)}
-        onOpenInteractions={() => setIsInteractionsOpen(true)}
-        onOpenPdfGuideline={() => {
-          setPreloadedPdfFile(null);
-          setIsPdfGuidelineOpen(true);
-        }}
-        onOpenDermEvidence={() => setIsDermEvidenceOpen(true)}
-        onOpenAccurx={() => setIsAccurxOpen(true)}
+        onOpenEvidence={openEvidence}
+        onOpenInteractions={openInteractions}
+        onOpenPdfGuideline={() => openPdfGuideline()}
+        onOpenDermEvidence={openDermEvidence}
+        onOpenAccurx={openAccurx}
       />
 
       {/* Cover Image banner */}
@@ -1220,8 +1160,8 @@ export default function Editor({
           selectedDocument={selectedChatDoc}
           onSelectDocument={setSelectedChatDoc}
           onInsertIntoPage={handleInsertAIMarkdown}
-          onOpenEvidence={() => setIsEvidenceOpen(true)}
-          onOpenInteractions={() => setIsInteractionsOpen(true)}
+          onOpenEvidence={openEvidence}
+          onOpenInteractions={openInteractions}
         />
       </div>
 
@@ -1238,76 +1178,6 @@ export default function Editor({
         />
       )}
 
-      {/* Keyboard Shortcuts Cheat Sheet Modal */}
-      <ShortcutsModal
-        isOpen={isShortcutsOpen}
-        onClose={() => setIsShortcutsOpen(false)}
-      />
-
-      {/* Heidi Clinical Evidence Decision Support & Calculators Modal */}
-      <ErrorBoundary fallbackTitle="Clinical Evidence Support Error">
-        <ClinicalEvidenceModal
-          isOpen={isEvidenceOpen}
-          onClose={() => setIsEvidenceOpen(false)}
-          currentDocId={doc.id}
-          currentDocTitle={title}
-          currentDocContext={docMarkdown}
-          onInsertIntoPage={handleInsertAIMarkdown}
-        />
-      </ErrorBoundary>
-
-      {/* Stockley's Drug Interactions Checker Modal */}
-      <ErrorBoundary fallbackTitle="Stockley's Interactions Checker Error">
-        <StockleysModal
-          isOpen={isInteractionsOpen}
-          onClose={() => setIsInteractionsOpen(false)}
-          currentDocId={doc.id}
-          currentDocTitle={title}
-          currentDocContext={docMarkdown}
-          onInsertIntoPage={handleInsertAIMarkdown}
-        />
-      </ErrorBoundary>
-
-      {/* PDF Guideline Sync & Common Presentations Analyzer Modal */}
-      <ErrorBoundary fallbackTitle="PDF Guideline Sync Error">
-        <PdfGuidelineModal
-          isOpen={isPdfGuidelineOpen}
-          onClose={() => {
-            setIsPdfGuidelineOpen(false);
-            setPreloadedPdfFile(null);
-          }}
-          preloadedFile={preloadedPdfFile}
-          onPresentationUpdated={(id) => {
-            if (doc.id === id) {
-              handleManualSync();
-            }
-          }}
-        />
-      </ErrorBoundary>
-
-      {/* Derm Evidence & Photo Analysis Modal */}
-      <ErrorBoundary fallbackTitle="Derm Evidence & Photos Error">
-        <DermEvidenceModal
-          isOpen={isDermEvidenceOpen}
-          onClose={() => setIsDermEvidenceOpen(false)}
-          currentDocId={doc.id}
-          currentDocTitle={title}
-          currentDocContext={docMarkdown}
-          onInsertIntoPage={handleInsertAIMarkdown}
-        />
-      </ErrorBoundary>
-
-      {/* Accurx / SMS Snippet Library & Generator Modal */}
-      <ErrorBoundary fallbackTitle="Accurx SMS Library Error">
-        <AccurxModal
-          isOpen={isAccurxOpen}
-          onClose={() => setIsAccurxOpen(false)}
-          currentDocId={doc.id}
-          currentDocTitle={title}
-          currentDocContext={docMarkdown}
-          onInsertIntoPage={handleInsertAIMarkdown}
-        />
-      </ErrorBoundary>
     </div>
   );
 }
