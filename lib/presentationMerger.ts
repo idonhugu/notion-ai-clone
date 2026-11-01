@@ -21,9 +21,21 @@ export interface ExtractedClinicalSections {
   clinicalPearls?: string[];
 }
 
+export interface MatchedConditionUpdate {
+  presentationId: string | null;
+  presentationTitle: string;
+  presentationIcon: string;
+  confidence: 'high' | 'medium' | 'low';
+  matchReason: string;
+  suggestedAction: 'merge' | 'create';
+  sections: ExtractedClinicalSections;
+}
+
 export interface AnalyzedPresentationResult {
   guidelineTitle: string;
   issuingAuthority: string;
+  lectureOverview?: string;
+  matchedConditions?: MatchedConditionUpdate[];
   matchedPresentationId: string | null;
   matchedPresentationTitle: string;
   matchedPresentationIcon: string;
@@ -42,61 +54,61 @@ export const SECTION_DEFINITIONS: {
   {
     key: 'history',
     heading: '📋 History',
-    matchPattern: /history/i,
+    matchPattern: /history|symptom/i,
     description: 'Key symptoms, risk factors, screening questions & red flags',
   },
   {
     key: 'examination',
     heading: '🩺 Examination',
-    matchPattern: /examination/i,
+    matchPattern: /examination|physical/i,
     description: 'Physical exam findings, vital sign thresholds & diagnostic signs',
   },
   {
     key: 'investigations',
     heading: '🔬 Investigations',
-    matchPattern: /investigations/i,
+    matchPattern: /investigation|test|blood/i,
     description: 'Bedside tests, blood panels, diagnostic thresholds & imaging',
   },
   {
     key: 'differentials',
     heading: '🔀 Differentials',
-    matchPattern: /differentials/i,
+    matchPattern: /differential/i,
     description: 'Key common and secondary differential diagnoses',
   },
   {
     key: 'rare',
     heading: '🚩 Rare / not to miss',
-    matchPattern: /rare|not to miss/i,
+    matchPattern: /rare|not to miss|red flag/i,
     description: 'Life-threatening emergencies, occult cancer & serious mimics',
   },
   {
     key: 'plan',
     heading: '💊 Plan',
-    matchPattern: /plan|management/i,
+    matchPattern: /plan|management|treatment|prescrib/i,
     description: 'First-line medications, exact BNF doses, durations & self-care',
   },
   {
     key: 'safetynetting',
     heading: '🔒 Safety-netting',
-    matchPattern: /safety-netting|safetynetting/i,
+    matchPattern: /safety-netting|safetynetting|safety netting/i,
     description: 'Emergency attendance triggers & worsening red flags',
   },
   {
     key: 'followup',
     heading: '📅 Follow-up',
-    matchPattern: /follow-up|followup/i,
+    matchPattern: /follow-up|followup|follow up|monitoring/i,
     description: 'Review timeframes, monitoring intervals & response checks',
   },
   {
     key: 'referral',
     heading: '🚑 When to Refer',
-    matchPattern: /refer|referral/i,
+    matchPattern: /refer|referral|admission|2ww/i,
     description: '2-Week Wait (2WW), same-day admission & routine clinic criteria',
   },
   {
     key: 'clinicalPearls',
     heading: '💡 Clinical Pearls & Guideline Updates',
-    matchPattern: /pearl|guideline update/i,
+    matchPattern: /pearl|guideline update|conference|notes/i,
     description: 'Local formulary quirks, practical nuances & prescribing tips',
   },
 ];
@@ -205,9 +217,23 @@ export function smartMergePresentationBlocks(
 ): any[] {
   let blocks = Array.isArray(existingBlocks) ? [...existingBlocks] : [];
 
+  // Extract all existing text in lower case to avoid duplicating identical lines
+  const existingTexts = blocks.map((b) =>
+    (b.content || []).map((c: any) => c.text || '').join('').trim().toLowerCase()
+  );
+
   for (const def of SECTION_DEFINITIONS) {
-    const newItems = selectedSections[def.key];
-    if (!Array.isArray(newItems) || newItems.length === 0) continue;
+    const rawItems = selectedSections[def.key];
+    if (!Array.isArray(rawItems) || rawItems.length === 0) continue;
+
+    // Filter out items that are already practically identical to existing content
+    const newItems = rawItems.filter((item) => {
+      const cleanItem = item.trim().toLowerCase();
+      if (!cleanItem) return false;
+      return !existingTexts.some((ext) => ext === cleanItem || (ext.length > 30 && ext.includes(cleanItem)));
+    });
+
+    if (newItems.length === 0) continue;
 
     // Find if the section heading already exists
     let headingIndex = -1;
@@ -225,13 +251,18 @@ export function smartMergePresentationBlocks(
     if (headingIndex !== -1) {
       // Find the end of this section (the next heading or the end of the blocks)
       let insertIndex = headingIndex + 1;
-      while (insertIndex < blocks.length && blocks[insertIndex].type !== 'heading' && blocks[insertIndex].type !== 'quote') {
+      while (
+        insertIndex < blocks.length &&
+        blocks[insertIndex].type !== 'heading' &&
+        blocks[insertIndex].type !== 'quote'
+      ) {
         insertIndex++;
       }
 
       // Create new bullet blocks
       const bulletBlocks = newItems.map((item) => makeBulletBlock(item, guidelineBadge));
       blocks.splice(insertIndex, 0, ...bulletBlocks);
+      existingTexts.push(...newItems.map((item) => item.trim().toLowerCase()));
     } else {
       // Heading does not exist yet. Insert heading + bullets right before the trailing quote block (or at the end).
       let quoteIndex = blocks.findIndex((b) => b.type === 'quote');
@@ -243,6 +274,7 @@ export function smartMergePresentationBlocks(
       ];
 
       blocks.splice(quoteIndex, 0, ...newSectionBlocks);
+      existingTexts.push(...newItems.map((item) => item.trim().toLowerCase()));
     }
   }
 

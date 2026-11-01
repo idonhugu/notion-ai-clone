@@ -587,29 +587,28 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
 
       const matchSystemPrompt = `You are a Senior NHS General Practice Medical Editor and Clinical CPD Education Specialist.
 You are analyzing a clinical guideline, conference lecture transcript, CPD symposium notes, seminar slides, or expert primary care document (Source/File: "${fileName || 'Clinical Document / Conference Notes'}").
-Your mission is to analyze the material, match it to the most appropriate condition among our 180+ GP Common Presentations knowledge base, and extract comprehensive, consultation-ready medical intelligence.
+Your mission is to analyze the material, identify ALL clinical conditions discussed that map to our 180+ GP Common Presentations knowledge base, and extract comprehensive, consultation-ready medical intelligence organized under the exact NICE CKS / RCGP condition headings.
 
 DOCUMENT TYPE RECOGNITION:
 The document may be:
-- An official Clinical Guideline (NICE, CKS, BTS/SIGN, BAD, PCDS, ICB, Trust pathway)
-- A Conference Lecture, Symposium, or Webinar (e.g. RCGP One Day Essentials, BMJ Masterclasses, Primary Care Dermatology Society, CPD seminar notes, or transcribed audio/slides)
-- Specialist teaching notes, clinical audits, or expert consensus papers
+- An official Clinical Guideline (NICE, CKS, BTS/SIGN, BAD, PCDS, ICB, Trust pathway) focusing on a single condition or a cluster of related conditions.
+- A Conference Lecture, Symposium, or Webinar (e.g. RCGP One Day Essentials, BMJ Masterclasses, Primary Care Dermatology Society, CPD seminar notes, or transcribed audio/slides) covering MULTIPLE conditions (e.g. a dermatology conference covering Acne, Eczema, Rosacea, Psoriasis, Scabies; a cardiorenal day covering Heart Failure, Hypertension, CKD; or general clinical pearls).
+- Specialist teaching notes, clinical audits, or expert consensus papers.
 
 OUR GP COMMON PRESENTATIONS CATALOG:
 ${catalogSummary}
 
 INSTRUCTIONS:
-1. MATCHING & TARGET PRESENTATION:
-   - Identify which existing Common Presentation is the best match. Select its exact title, ID, and icon from the catalog.
-   - If the material covers a major standalone topic or cross-cutting area (e.g. "Dermatology in Skin of Color", "Hair Loss & GLP-1 Agonists", "Primary Care Dermoscopy", "Paediatric Food Allergy"), you can specify "matchedPresentationId": null, and suggest a concise title and appropriate medical emoji icon to create a brand-new presentation!
-   - Provide a 1-2 sentence "matchReason" explaining the clinical link or why this should be a new presentation.
-   - Rate confidence: "high" (direct 1:1 match), "medium" (covers related area), or "low" (novel condition).
-   - "suggestedAction": "merge" (if existing match found) or "create" (if new condition).
+1. IDENTIFY ALL COVERED CONDITIONS:
+   - Identify every distinct clinical presentation discussed in the document that matches a presentation in our catalog (or represents a significant new standalone presentation, e.g. "Dermatology in Skin of Color", "GLP-1 Agonist Complications").
+   - A conference lecture or multi-topic document may discuss 2, 3, 4, 5, or more conditions. Extract EACH one!
+   - For EACH condition found, match it to the catalog: provide its exact catalog title, ID, and icon (or "presentationId": null and a recommended title and medical emoji icon if it should be created anew).
+   - Provide a 1-2 sentence "matchReason" explaining why this material applies to this specific condition.
+   - Rate confidence: "high", "medium", or "low".
+   - "suggestedAction": "merge" (if existing match found) or "create" (if new).
 
-2. CLINICAL INTELLIGENCE EXTRACTION:
-   Extract high-yield clinical recommendations strictly relevant to UK Primary Care General Practice (NICE CKS / RCGP standard).
-   Pay special attention to conference pearls, expert diagnostic subtleties, atypical presentations, and demographic considerations (such as skin of color variations, subtle red flags, drug-induced etiologies, and prescribing nuances).
-   Categorize into:
+2. CLINICAL INTELLIGENCE EXTRACTION (PER CONDITION):
+   For EACH condition, extract high-yield clinical recommendations strictly relevant to UK Primary Care General Practice (NICE CKS / RCGP standard), organized into the standard 10 NICE CKS / RCGP headings:
    - "history": Key diagnostic questions, symptom characteristics, risk factors, screening criteria, and red flags.
    - "examination": Physical examination steps, vital sign thresholds, specific clinical tests, and physical red flags (including pigmentary and morphological variations across Fitzpatrick skin phototypes I-VI).
    - "investigations": Point-of-care / bedside tests, primary care bloods with diagnostic thresholds, sputum/urine tests, dermoscopy clues, and imaging indications.
@@ -622,32 +621,41 @@ INSTRUCTIONS:
    - "clinicalPearls": Practical clinical tips, lecture pearls, diagnostic pearls (e.g. erythema masked as violaceous/slate-grey in pigmented skin, GLP-1 hair loss, fungal vs eczema traps), or prescribing nuances highlighted in the material.
 
 3. METADATA:
-   - "guidelineTitle": Official title of the guideline or conference lecture (e.g. "Essential Dermatology: Dermatology in Skin of Color - Dr. Farah Mahmood" or "NICE NG198: Acne Vulgaris").
-   - "issuingAuthority": Organization, Conference, or Speaker (e.g. "RCGP Essential Dermatology Conference / Dr. Farah Mahmood", "NICE CKS", "British Association of Dermatologists", "BMJ Masterclass").
+   - "guidelineTitle": Official title of the guideline or conference lecture (e.g. "RCGP One Day Essentials: Dermatology" or "NICE NG198: Acne Vulgaris").
+   - "issuingAuthority": Organization, Conference, or Speaker (e.g. "RCGP / Primary Care Dermatology Society", "NICE CKS", "British Association of Dermatologists", "BMJ Masterclass").
+   - "lectureOverview": 1-2 sentence executive summary of the document.
+
+CONCISENESS GUIDELINE:
+To ensure consultation-ready clarity and complete JSON output, provide 2 to 4 high-yield, punchy bullet points per heading (1-2 sentences each). Focus on high-yield UK prescribing pearls, exact drug names/doses, diagnostic criteria, and safety-netting.
 
 OUTPUT FORMAT:
 Return strictly a valid JSON object matching this schema. Do NOT include markdown code fences (\`\`\`json) or conversational prose:
 {
   "guidelineTitle": "string",
   "issuingAuthority": "string",
-  "matchedPresentationId": "uuid or null",
-  "matchedPresentationTitle": "string",
-  "matchedPresentationIcon": "string",
-  "confidence": "high" | "medium" | "low",
-  "matchReason": "string",
-  "suggestedAction": "merge" | "create",
-  "sections": {
-    "history": ["item 1", "item 2"],
-    "examination": ["item 1", "item 2"],
-    "investigations": ["item 1", "item 2"],
-    "differentials": ["item 1", "item 2"],
-    "rare": ["item 1", "item 2"],
-    "plan": ["item 1", "item 2"],
-    "safetynetting": ["item 1", "item 2"],
-    "followup": ["item 1", "item 2"],
-    "referral": ["item 1", "item 2"],
-    "clinicalPearls": ["item 1", "item 2"]
-  }
+  "lectureOverview": "string",
+  "matchedConditions": [
+    {
+      "presentationId": "uuid from catalog or null if new",
+      "presentationTitle": "string",
+      "presentationIcon": "string",
+      "confidence": "high" | "medium" | "low",
+      "matchReason": "string",
+      "suggestedAction": "merge" | "create",
+      "sections": {
+        "history": ["item 1", "item 2"],
+        "examination": ["item 1"],
+        "investigations": ["item 1"],
+        "differentials": ["item 1"],
+        "rare": ["item 1"],
+        "plan": ["item 1"],
+        "safetynetting": ["item 1"],
+        "followup": ["item 1"],
+        "referral": ["item 1"],
+        "clinicalPearls": ["item 1"]
+      }
+    }
+  ]
 }`;
 
       let aiJsonOutput = '';
@@ -658,6 +666,7 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
           model: CLAUDE_MODELS.OPUS,
           system: matchSystemPrompt,
           messages: [{ role: 'user', content: `CLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""` }],
+          maxTokens: 8192,
           temperature: 0.1,
         });
         if (claudeRes && claudeRes.trim().length > 0) {
@@ -696,26 +705,43 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
         );
       }
 
+      let parsedResult: any = null;
       try {
         const clean = aiJsonOutput
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
           .replace(/\s*```$/i, '')
           .trim();
-        const parsedResult = JSON.parse(clean);
+        parsedResult = JSON.parse(clean);
+      } catch (firstParseErr) {
+        // Attempt lightweight recovery for truncated JSON output
+        try {
+          const clean = aiJsonOutput
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim();
 
-        return NextResponse.json({
-          success: true,
-          result: parsedResult,
-          presentations: presentationsList,
-          fallbackNotice: claudePdfError
-            ? (isClaudeTokenOrCreditError(claudePdfError)
-                ? 'Claude token/quota limit reached. Reverted seamlessly to Google Gemini for this guideline analysis.'
-                : 'Claude notice: Reverted seamlessly to Google Gemini for this guideline analysis.')
-            : null,
-        });
-      } catch (parseErr) {
-        console.error('Failed to parse guideline analysis JSON:', parseErr, aiJsonOutput);
+          const lastObjEnd = clean.lastIndexOf('}');
+          if (lastObjEnd !== -1) {
+            let candidate = clean.slice(0, lastObjEnd + 1);
+            const openBrackets = (candidate.match(/\[/g) || []).length;
+            const closeBrackets = (candidate.match(/\]/g) || []).length;
+            const openBraces = (candidate.match(/\{/g) || []).length;
+            const closeBraces = (candidate.match(/\}/g) || []).length;
+
+            for (let b = 0; b < openBrackets - closeBrackets; b++) candidate += ']';
+            for (let b = 0; b < openBraces - closeBraces; b++) candidate += '}';
+
+            parsedResult = JSON.parse(candidate);
+            console.log('Successfully repaired and recovered truncated JSON for guideline analysis.');
+          }
+        } catch (repairErr) {
+          console.warn('JSON repair failed:', repairErr);
+        }
+      }
+
+      if (!parsedResult) {
         return NextResponse.json(
           {
             error: 'Failed to parse structured guideline data from AI response.',
@@ -724,6 +750,41 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
           { status: 500 }
         );
       }
+
+      // Normalize single-condition vs multi-condition schema
+      if (Array.isArray(parsedResult.matchedConditions) && parsedResult.matchedConditions.length > 0) {
+        const primary = parsedResult.matchedConditions[0];
+        parsedResult.matchedPresentationId = primary.presentationId || null;
+        parsedResult.matchedPresentationTitle = primary.presentationTitle || 'Clinical Presentation';
+        parsedResult.matchedPresentationIcon = primary.presentationIcon || '🩺';
+        parsedResult.confidence = primary.confidence || 'high';
+        parsedResult.matchReason = primary.matchReason || 'Condition match';
+        parsedResult.suggestedAction = primary.suggestedAction || 'merge';
+        parsedResult.sections = primary.sections || {};
+      } else if (parsedResult.sections) {
+        parsedResult.matchedConditions = [
+          {
+            presentationId: parsedResult.matchedPresentationId || null,
+            presentationTitle: parsedResult.matchedPresentationTitle || 'Clinical Presentation',
+            presentationIcon: parsedResult.matchedPresentationIcon || '🩺',
+            confidence: parsedResult.confidence || 'high',
+            matchReason: parsedResult.matchReason || 'Condition match',
+            suggestedAction: parsedResult.suggestedAction || 'merge',
+            sections: parsedResult.sections,
+          },
+        ];
+      }
+
+      return NextResponse.json({
+        success: true,
+        result: parsedResult,
+        presentations: presentationsList,
+        fallbackNotice: claudePdfError
+          ? (isClaudeTokenOrCreditError(claudePdfError)
+              ? 'Claude token/quota limit reached. Reverted seamlessly to Google Gemini for this guideline analysis.'
+              : 'Claude notice: Reverted seamlessly to Google Gemini for this guideline analysis.')
+          : null,
+      });
     }
 
     // Extract text from attached docs bundle if provided

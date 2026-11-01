@@ -194,7 +194,7 @@ export async function streamClaude(params: ClaudeCallParams): Promise<ReadableSt
 export async function generateClaudeText(params: ClaudeCallParams): Promise<string> {
   const apiKey = getClaudeApiKey();
   const model = params.model || CLAUDE_MODELS.OPUS;
-  const max_tokens = params.maxTokens || 4096;
+  const max_tokens = params.maxTokens || 8192;
 
   const payload: any = {
     model,
