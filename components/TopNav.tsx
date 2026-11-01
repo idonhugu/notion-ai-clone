@@ -27,6 +27,8 @@ import {
   BookOpen,
   ShieldAlert,
   Eye,
+  MessageSquare,
+  Smartphone,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { Document } from '@/lib/types';
@@ -57,6 +59,7 @@ interface TopNavProps {
   onOpenInteractions?: () => void;
   onOpenPdfGuideline?: () => void;
   onOpenDermEvidence?: () => void;
+  onOpenAccurx?: () => void;
 }
 
 export function TopNav({
@@ -84,6 +87,7 @@ export function TopNav({
   onOpenInteractions,
   onOpenPdfGuideline,
   onOpenDermEvidence,
+  onOpenAccurx,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -235,6 +239,18 @@ export function TopNav({
           >
             <Eye className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
             <span className="hidden sm:inline">Derm AI</span>
+          </button>
+        )}
+
+        {/* Accurx / SMS Snippet Library */}
+        {onOpenAccurx && (
+          <button
+            onClick={onOpenAccurx}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200/60 dark:border-blue-800/60 transition shadow-xs"
+            title="Accurx & SMS Snippets Library with NHS PILs (Cmd+Shift+A)"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span className="hidden sm:inline">Accurx SMS</span>
           </button>
         )}
 

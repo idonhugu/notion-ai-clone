@@ -22,6 +22,8 @@ import {
   BookOpen,
   ShieldAlert,
   Eye,
+  Smartphone,
+  MessageSquare,
 } from 'lucide-react';
 import { Document, DocumentNode } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
@@ -389,6 +391,24 @@ export function Sidebar({
           </div>
           <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-semibold">
             BAD / 2WW
+          </span>
+        </button>
+
+        {/* Accurx / SMS Snippet Library */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('notion:open_accurx_modal'));
+            setIsMobileOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition font-medium"
+          title="Accurx & SMS Snippets with Verified NHS PILs (Cmd+Shift+A)"
+        >
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Accurx SMS Library</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-semibold">
+            NHS PILs
           </span>
         </button>
 

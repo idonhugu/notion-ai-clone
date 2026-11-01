@@ -32,6 +32,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
       icon: Sparkles,
       iconColor: 'text-purple-600 dark:text-purple-400',
       items: [
+        { keys: ['Cmd', 'Shift', 'A'], desc: 'Open Accurx SMS Snippet Library & Generator (NHS PILs)' },
         { keys: ['Cmd', 'Shift', 'D'], desc: 'Open Derm Evidence: photo analysis & lesion description' },
         { keys: ['Cmd', 'U'], desc: 'Analyze & Sync Guideline PDF into Common Presentations' },
         { keys: ['Cmd', 'I'], desc: "Open Stockley's Drug Interactions Checker" },

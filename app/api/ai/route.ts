@@ -115,6 +115,9 @@ export async function POST(req: NextRequest) {
       documentTitle,
       images,
       clinicalData,
+      condition,
+      characterTarget,
+      patientContext,
     } = await req.json();
 
     // Verified active Google Gemini API key provided by user (base64 encoded to protect push integrity)
@@ -1027,6 +1030,61 @@ ${clinicalData?.sampleImageDescription ? `- Clinical Visual Description / Preset
 ${prompt ? `- Clinician Question: "${prompt}"\n` : ''}
 
 Please analyze the uploaded image(s) or clinical scenario thoroughly. Generate the complete evidence-based report detailing how to describe the lesion/rash using standard nomenclature, the dermoscopy pattern breakdown, ranked differentials, 2WW cancer triage, primary care management, and copyable e-RS consultation note.`;
+        break;
+      }
+
+      case 'generate_accurx_sms': {
+        systemInstruction = `You are the Accurx & NHS Patient Communication Engine for Laksha's UK General Practice WorkSpace.
+You specialize in drafting clear, empathetic, clinically precise SMS messages with verified NHS.uk and Patient.info Patient Information Leaflet (PIL) links, tailored for UK General Practice (Accurx Chain SMS, EMIS Web, and SystmOne).
+
+CORE CLINICAL PRINCIPLES FOR ACCURX SMS:
+1. Tone & Register:
+   - Plain English, empathetic, reassuring, and completely free of medical jargon.
+   - Natural SMS structure: Begins with "Dear [Patient]," or friendly greeting, and concludes with "Best wishes, [Dr Name / Surgery Name]".
+2. Verified NHS / Patient.info Links:
+   - ALWAYS include a valid, official NHS.uk link (e.g. https://www.nhs.uk/conditions/... or https://www.nhs.uk/medicines/...) or Patient.info URL.
+   - Never generate broken, hallucinated, or placeholder URLs. Use real, official NHS conditions/medicines pathways.
+3. Message Length & Conciseness:
+   - ${characterTarget === 'single_sms' ? 'ULTRA-CONCISE: Strictly keep the SMS message under 160 characters (1 SMS segment) while retaining the core advice and PIL link.' : 'STANDARD LENGTH: Keep the SMS message under 320 characters (1-2 SMS segments) so it remains concise and readable on patient mobile screens.'}
+4. Clear Safety Netting:
+   - Explicitly define amber/red flag symptoms that require contacting the GP surgery, calling 111, or dialling 999 / attending A&E in an emergency.
+
+STRUCTURE YOUR OUTPUT CLEARLY WITH THESE DISTINCT MARKDOWN SECTIONS:
+
+### 📱 Ready-to-Copy Accurx SMS Message
+\`\`\`text
+(Exact SMS message text ready to be pasted directly into Accurx. Include standard placeholders [Patient], [Dr Name], [Surgery Name], and the verified NHS PIL link.)
+\`\`\`
+
+### 📚 Verified NHS Patient Information Leaflet (PIL)
+- **Leaflet Title:** [Official Name of NHS / Patient.info Leaflet]
+- **Verified URL:** [Direct Hyperlink](https://www.nhs.uk/...)
+- **Patient Advice Summary:** [1-2 sentences summarizing key self-care guidance in the leaflet]
+
+### 🚨 Safety Netting & Red Flags Included
+- [List 2-4 critical warning signs or escalation thresholds included in the SMS]
+
+### 📝 EHR Consultation Record (EMIS / SystmOne Ready)
+\`\`\`text
+(2-3 lines of professional, objective consultation text ready for immediate paste into EHR, e.g. "Accurx SMS sent: Advised on ... NHS PIL link provided. Safety netted regarding ...")
+\`\`\`
+`;
+
+        const toneDescriptor = tone === 'empathic'
+          ? 'warm, compassionate, and gentle'
+          : tone === 'paediatric'
+          ? 'reassuring and clear for a worried parent or guardian'
+          : tone === 'concise'
+          ? 'brief, direct, and elderly-friendly with short sentences'
+          : 'standard UK General Practice professional and caring';
+
+        userPrompt = `Clinical Scenario / SMS Request:
+"${prompt || 'NHS self-care advice and medication guidance'}"
+
+Desired Tone: ${toneDescriptor}
+${condition ? `Clinical Condition: "${condition}"\n` : ''}
+${patientContext ? `Patient Context:\n"""\n${patientContext}\n"""\n` : ''}
+${context ? `Active Document Context:\n"""\n${context.substring(0, 1500)}\n"""\n` : ''}`;
         break;
       }
 
