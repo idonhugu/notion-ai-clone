@@ -9,9 +9,11 @@ export default async function proxy(request: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
     pathname === '/favicon.ico' ||
-    pathname === '/manifest.json'
+    pathname === '/manifest.json' ||
+    pathname.endsWith('.mjs') ||
+    pathname.endsWith('.js')
   ) {
-    return await updateSession(request);
+    return NextResponse.next();
   }
 
   const adminCookie = request.cookies.get('notion_admin_session');
@@ -63,6 +65,6 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mjs|js)$).*)',
   ],
 };
