@@ -79,6 +79,42 @@ export default function Editor({
   const [isSubpagesEnabled, setIsSubpagesEnabled] = useState(false);
   const [subpagesCount, setSubpagesCount] = useState<number | null>(null);
 
+  // Text notes / document editor enabled state (can be closed/minimized on folder-only pages like One Day Essentials)
+  const [isTextSpaceEnabled, setIsTextSpaceEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`notion_text_space_${initialDoc.id}`);
+        if (saved !== null) return saved === 'true';
+      } catch {}
+    }
+    const entry = (initialDoc.attachments || []).find((f: any) => f.id === '__page_style__');
+    if (entry && entry.url) {
+      try {
+        const parsed = JSON.parse(entry.url);
+        if (typeof parsed.isTextSpaceEnabled === 'boolean') {
+          return parsed.isTextSpaceEnabled;
+        }
+      } catch {}
+    }
+    // Specific check for One Day Essentials or pages where title contains "one day essential"
+    if (initialDoc.title && initialDoc.title.toLowerCase().includes('one day essential')) {
+      return false;
+    }
+    const hasAttachments = (initialDoc.attachments || []).some(
+      (f: any) => f.id !== '__kanban__' && f.id !== '__page_style__'
+    );
+    const hasAnyText = Array.isArray(initialDoc.content) && initialDoc.content.some((b: any) => {
+      if (Array.isArray(b.content) && b.content.length > 0) {
+        return b.content.some((c: any) => c.text && c.text.trim().length > 0);
+      }
+      return false;
+    });
+    if (!hasAnyText && hasAttachments) {
+      return false;
+    }
+    return true;
+  });
+
   useEffect(() => {
     if (hasExistingAttachments) {
       setIsAttachmentsEnabled(true);
@@ -494,7 +530,55 @@ export default function Editor({
     }
 
     const otherAttachments = attachments.filter((f) => f.id !== '__page_style__');
-    const stylePayload = { fontStyle: newFont, isSmallText: newSmallText };
+    const existingStyleEntry = attachments.find((f) => f.id === '__page_style__');
+    let existingParsed: any = {};
+    if (existingStyleEntry && existingStyleEntry.url) {
+      try {
+        existingParsed = JSON.parse(existingStyleEntry.url);
+      } catch {}
+    }
+    const stylePayload = { ...existingParsed, fontStyle: newFont, isSmallText: newSmallText, isTextSpaceEnabled };
+    const styleEntry: AttachedFile = {
+      id: '__page_style__',
+      name: 'Page Style Configuration',
+      size: JSON.stringify(stylePayload).length,
+      type: 'application/vnd.notion.style+json',
+      url: JSON.stringify(stylePayload),
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const updated = [...otherAttachments, styleEntry];
+    setAttachments(updated);
+    saveDocument({ attachments: updated });
+  };
+
+  // Toggle text space enabled state and persist to __page_style__
+  const handleToggleTextSpace = (enabled?: boolean) => {
+    const nextVal = enabled !== undefined ? enabled : !isTextSpaceEnabled;
+    setIsTextSpaceEnabled(nextVal);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`notion_text_space_${doc.id}`, String(nextVal));
+      } catch {}
+    }
+
+    const otherAttachments = attachments.filter((f) => f.id !== '__page_style__');
+    const existingStyleEntry = attachments.find((f) => f.id === '__page_style__');
+    let existingParsed: any = {};
+    if (existingStyleEntry && existingStyleEntry.url) {
+      try {
+        existingParsed = JSON.parse(existingStyleEntry.url);
+      } catch {}
+    }
+
+    const stylePayload = {
+      ...existingParsed,
+      fontStyle,
+      isSmallText,
+      isTextSpaceEnabled: nextVal,
+    };
+
     const styleEntry: AttachedFile = {
       id: '__page_style__',
       name: 'Page Style Configuration',
@@ -1002,6 +1086,8 @@ export default function Editor({
         onToggleSubpages={() => setIsSubpagesEnabled((prev) => !prev)}
         isAttachmentsEnabled={isAttachmentsEnabled}
         onToggleAttachments={() => setIsAttachmentsEnabled((prev) => !prev)}
+        isTextSpaceEnabled={isTextSpaceEnabled}
+        onToggleTextSpace={() => handleToggleTextSpace()}
       />
 
       {/* Cover Image banner */}
@@ -1094,11 +1180,13 @@ export default function Editor({
           {/* VIEW 1: Document Canvas */}
           {activeView === 'document' && (
             <div className="space-y-6">
-              {/* Task Checklist Progress Bar */}
-              <TaskProgressBar
-                total={checklistStats.total}
-                completed={checklistStats.completed}
-              />
+              {/* Task Checklist Progress Bar (only if text notes enabled and tasks exist) */}
+              {isTextSpaceEnabled && checklistStats.total > 0 && (
+                <TaskProgressBar
+                  total={checklistStats.total}
+                  completed={checklistStats.completed}
+                />
+              )}
 
               {/* Inline AI Menu triggered via Space or Button */}
               {showInlineAI && (
@@ -1114,54 +1202,60 @@ export default function Editor({
                 />
               )}
 
-              {/* Quick Notion Formatting Bar (Typography & Color Palette) */}
-              <EditorToolbar
-                currentFont={fontStyle}
-                onSelectFont={(f) => handleUpdatePageStyle(f, isSmallText)}
-                isSmallText={isSmallText}
-                onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
-                onToggleStyle={handleToggleStyle}
-                onApplyTextColor={handleApplyTextColor}
-                onApplyBgColor={handleApplyBgColor}
-                onAlignText={handleAlignText}
-                onOpenAI={() => setShowInlineAI(true)}
-                activeStyles={activeStyles}
-              />
+              {/* Text Notes & Formatting Area (can be hidden on pages like One Day Essentials) */}
+              {isTextSpaceEnabled && (
+                <>
+                  {/* Quick Notion Formatting Bar (Typography & Color Palette) */}
+                  <EditorToolbar
+                    currentFont={fontStyle}
+                    onSelectFont={(f) => handleUpdatePageStyle(f, isSmallText)}
+                    isSmallText={isSmallText}
+                    onToggleSmallText={() => handleUpdatePageStyle(fontStyle, !isSmallText)}
+                    onToggleStyle={handleToggleStyle}
+                    onApplyTextColor={handleApplyTextColor}
+                    onApplyBgColor={handleApplyBgColor}
+                    onAlignText={handleAlignText}
+                    onOpenAI={() => setShowInlineAI(true)}
+                    activeStyles={activeStyles}
+                    onClose={() => handleToggleTextSpace(false)}
+                  />
 
-              {/* Core BlockNote Editor Canvas with Dynamic Theme & Font Typography Matching */}
-              <div
-                className={`min-h-[420px] transition-all ${
-                  fontStyle === 'serif' ? 'font-serif' : fontStyle === 'mono' ? 'font-mono' : 'font-sans'
-                } ${isSmallText ? 'text-[14px]' : 'text-[15px]'}`}
-                style={{
-                  fontFamily:
-                    fontStyle === 'serif'
-                      ? 'Charter, Georgia, Cambria, "Times New Roman", Times, serif'
-                      : fontStyle === 'mono'
-                      ? '"JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, monospace'
-                      : '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif',
-                }}
-                onKeyDown={handleKeyDown}
-                onClickCapture={(e) => {
-                  const target = e.target as HTMLElement;
-                  const anchor = target?.closest('a');
-                  if (anchor) {
-                    const href = anchor.getAttribute('href');
-                    if (href && href.startsWith('/doc/')) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      router.push(href);
-                    }
-                  }
-                }}
-              >
-                <BlockNoteView
-                  editor={editor}
-                  onChange={handleEditorChange}
-                  theme={theme === 'dark' ? 'dark' : 'light'}
-                  className="notion-editor-styles"
-                />
-              </div>
+                  {/* Core BlockNote Editor Canvas with Dynamic Theme & Font Typography Matching */}
+                  <div
+                    className={`min-h-[140px] transition-all ${
+                      fontStyle === 'serif' ? 'font-serif' : fontStyle === 'mono' ? 'font-mono' : 'font-sans'
+                    } ${isSmallText ? 'text-[14px]' : 'text-[15px]'}`}
+                    style={{
+                      fontFamily:
+                        fontStyle === 'serif'
+                          ? 'Charter, Georgia, Cambria, "Times New Roman", Times, serif'
+                          : fontStyle === 'mono'
+                          ? '"JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas, monospace'
+                          : '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif',
+                    }}
+                    onKeyDown={handleKeyDown}
+                    onClickCapture={(e) => {
+                      const target = e.target as HTMLElement;
+                      const anchor = target?.closest('a');
+                      if (anchor) {
+                        const href = anchor.getAttribute('href');
+                        if (href && href.startsWith('/doc/')) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          router.push(href);
+                        }
+                      }
+                    }}
+                  >
+                    <BlockNoteView
+                      editor={editor}
+                      onChange={handleEditorChange}
+                      theme={theme === 'dark' ? 'dark' : 'light'}
+                      className="notion-editor-styles"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Nested Sub-pages Section (Documents within notes) */}
               {isSubpagesEnabled && (
@@ -1194,11 +1288,21 @@ export default function Editor({
               )}
 
               {/* Clean Notion-style on-demand add buttons when sections are closed/hidden */}
-              {(!isSubpagesEnabled || !isAttachmentsEnabled) && (
-                <div className="flex items-center gap-2 pt-4 border-t border-neutral-100 dark:border-neutral-800/60">
+              {(!isTextSpaceEnabled || !isSubpagesEnabled || !isAttachmentsEnabled) && (
+                <div className="flex items-center flex-wrap gap-2 pt-4 border-t border-neutral-100 dark:border-neutral-800/60">
                   <span className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mr-1">
                     Add to page:
                   </span>
+                  {!isTextSpaceEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTextSpace(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-amber-600 dark:hover:text-amber-400 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 transition shadow-2xs cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <span>+ Notes & Text</span>
+                    </button>
+                  )}
                   {!isSubpagesEnabled && (
                     <button
                       type="button"

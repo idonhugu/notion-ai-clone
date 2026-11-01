@@ -16,6 +16,7 @@ import {
   Check,
   Type,
   Baseline,
+  X,
 } from 'lucide-react';
 import {
   NOTION_FONTS,
@@ -33,6 +34,7 @@ interface EditorToolbarProps {
   onApplyBgColor: (color: string) => void;
   onAlignText?: (align: 'left' | 'center' | 'right') => void;
   onOpenAI: () => void;
+  onClose?: () => void;
   activeStyles?: {
     bold?: boolean;
     italic?: boolean;
@@ -54,6 +56,7 @@ export function EditorToolbar({
   onApplyBgColor,
   onAlignText,
   onOpenAI,
+  onClose,
   activeStyles = {},
 }: EditorToolbarProps) {
   const [isFontOpen, setIsFontOpen] = useState(false);
@@ -391,15 +394,28 @@ export function EditorToolbar({
       </div>
 
       {/* AI Assistant Quick Trigger */}
-      <button
-        type="button"
-        onClick={onOpenAI}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100/80 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/80 transition shadow-2xs flex-shrink-0 ml-1.5"
-        title="Ask Laksha's AI to write, edit, or format"
-      >
-        <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
-        <span className="hidden sm:inline">Ask AI</span>
-      </button>
+      <div className="flex items-center gap-1 flex-shrink-0 ml-1.5">
+        <button
+          type="button"
+          onClick={onOpenAI}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100/80 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/80 transition shadow-2xs"
+          title="Ask Laksha's AI to write, edit, or format"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+          <span className="hidden sm:inline">Ask AI</span>
+        </button>
+
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+            title="Hide text notes space"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

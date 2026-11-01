@@ -66,6 +66,8 @@ interface TopNavProps {
   onToggleSubpages?: () => void;
   isAttachmentsEnabled?: boolean;
   onToggleAttachments?: () => void;
+  isTextSpaceEnabled?: boolean;
+  onToggleTextSpace?: () => void;
 }
 
 export function TopNav({
@@ -99,6 +101,8 @@ export function TopNav({
   onToggleSubpages,
   isAttachmentsEnabled = false,
   onToggleAttachments,
+  isTextSpaceEnabled = true,
+  onToggleTextSpace,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -430,6 +434,26 @@ export function TopNav({
                   {isFullWidth ? 'ON' : 'OFF'}
                 </span>
               </button>
+
+              {/* Text notes / document space toggle */}
+              {onToggleTextSpace && (
+                <button
+                  type="button"
+                  onClick={onToggleTextSpace}
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition text-left"
+                >
+                  <span>Text notes space</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isTextSpaceEnabled
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-neutral-200/60 dark:bg-neutral-700 text-neutral-500'
+                    }`}
+                  >
+                    {isTextSpaceEnabled ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+              )}
 
               {/* Sub-pages section toggle */}
               {onToggleSubpages && (
