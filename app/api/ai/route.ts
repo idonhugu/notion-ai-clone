@@ -1384,6 +1384,23 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
     let usedClaudeFallback = false;
     let claudeFallbackBanner = '';
 
+    // Quick formatting and structural document editing actions ALWAYS use ultra-fast Google Gemini Flash
+    const isQuickFormattingAction =
+      action === 'checklist' ||
+      action === 'improve' ||
+      action === 'simplify' ||
+      action === 'summarize' ||
+      action === 'longer' ||
+      action === 'table' ||
+      action === 'action_items' ||
+      action === 'translate' ||
+      action === 'eli5' ||
+      action === 'continue' ||
+      action === 'generate' ||
+      action === 'doc_summarize' ||
+      action === 'doc_notes' ||
+      action === 'format';
+
     const isExplicitlyMedicalAction =
       action === 'clinical_evidence' ||
       action === 'stockleys_checker' ||
@@ -1391,16 +1408,22 @@ ${includeSources && attachedBundleText ? sourcesInstruction : ''}`;
       action === 'generate_patient_explainer' ||
       action === 'generate_accurx_sms';
 
-    const isMedicalContent =
-      isExplicitlyMedicalAction ||
-      /\b(patient|symptom|symptoms|diagnosis|differentials|nice|cks|bnf|prescrib|treatment|guideline|hypertension|asthma|rash|lesion|ecg|blood test|consultation|referral|dose|antibiotic|infection|dermoscopy|haematology|cardiology|paediatric)\b/i.test(
-        `${prompt || ''} ${context || ''} ${documentTitle || ''}`
-      );
+    // Route to Claude only for specialized clinical decision support & medical reasoning tasks.
+    // Quick formatting (e.g. Turn into checklist, Fix grammar, Summarize, Tables) ALWAYS routes to Gemini Flash.
+    const shouldRouteToClaude =
+      !isQuickFormattingAction &&
+      (isExplicitlyMedicalAction ||
+        (/\b(clinical guideline|nice cks|bnf recommendation|polypharmacy interaction|dermoscopy lesion|consultation note for|differential diagnosis for)\b/i.test(
+          `${prompt || ''} ${context || ''}`
+        ) &&
+          !/\b(format|checklist|grammar|spelling|table|bullet point|summarize|simplify)\b/i.test(
+            prompt || ''
+          )));
 
-    if (isMedicalContent) {
+    if (shouldRouteToClaude) {
       // Split as specified in user architecture:
-      // - Everyday Tasks (Formatting, Accurx SMS, Routine Summaries) -> Claude Sonnet 5.5
-      // - Complex Reasoning (Deep Logic, Audits, Evidence, Interactions, Dermoscopy) -> Claude Opus 5.5
+      // - Patient SMS & Leaflet synthesis -> Claude Sonnet 5.5
+      // - Complex Clinical Reasoning (Evidence, Interactions, Dermoscopy, Explainer) -> Claude Opus 5.5
       const targetClaudeModel =
         action === 'generate_accurx_sms'
           ? CLAUDE_MODELS.SONNET
