@@ -197,7 +197,9 @@ export function AIChatSidecar({
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const visibleAttachments = attachedFiles.filter((f) => f.id !== '__kanban__');
+  const visibleAttachments = attachedFiles.filter(
+    (f) => f.id !== '__kanban__' && !f.isFolder && f.type !== 'folder'
+  );
 
   useEffect(() => {
     const handleOpenPres = () => {

@@ -35,6 +35,9 @@ export interface AttachedFile {
   type: string;
   url: string;
   uploadedAt: string;
+  folderId?: string | null;
+  isFolder?: boolean;
+  color?: string;
 }
 
 export interface Document {
