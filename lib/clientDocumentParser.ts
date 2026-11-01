@@ -10,6 +10,7 @@ export interface ExtractionResult {
   wordCount: number;
   charCount: number;
   extractedLocally: boolean;
+  images?: string[];
   error?: string;
 }
 
@@ -71,10 +72,19 @@ export async function extractTextFromFileInBrowser(file: File): Promise<Extracti
     // 4. PDF Document (.pdf)
     if (name.endsWith('.pdf') || mime.includes('pdf')) {
       const buffer = await file.arrayBuffer();
-      const raw = await extractPdfTextInBrowser(buffer);
-      if (raw && isGenuineReadableText(raw)) {
-        const cleaned = cleanDocumentText(raw);
+      const pdfRes = await extractPdfInBrowser(buffer);
+      if (pdfRes.text && pdfRes.text.trim().length >= 10) {
+        const cleaned = cleanDocumentText(pdfRes.text);
         return toExtractionResult(cleaned, true);
+      }
+      if (pdfRes.images && pdfRes.images.length > 0) {
+        return {
+          text: '',
+          images: pdfRes.images,
+          wordCount: 0,
+          charCount: 0,
+          extractedLocally: true,
+        };
       }
     }
 
@@ -97,13 +107,18 @@ export async function extractTextFromFileInBrowser(file: File): Promise<Extracti
   }
 }
 
-function toExtractionResult(text: string, extractedLocally: boolean): ExtractionResult {
+function toExtractionResult(
+  text: string,
+  extractedLocally: boolean,
+  images?: string[]
+): ExtractionResult {
   const words = text.match(/[a-zA-Z0-9'-]+/g) || [];
   return {
     text,
     wordCount: words.length,
     charCount: text.length,
     extractedLocally,
+    images,
   };
 }
 
@@ -112,12 +127,12 @@ function toExtractionResult(text: string, extractedLocally: boolean): Extraction
  * rather than compressed binary fragments, PDF operator noise, or corrupted stream bytes.
  */
 export function isGenuineReadableText(text: string): boolean {
-  if (!text || text.trim().length < 30) return false;
-
-  const words = text.match(/[a-zA-Z]{2,}/g) || [];
-  if (words.length < 10) return false;
+  if (!text || text.trim().length < 10) return false;
 
   // 1. Check for PDF internal syntax dominance
+  const words = text.match(/[a-zA-Z]{2,}/g) || [];
+  if (words.length === 0) return false;
+
   const pdfKeywords = [
     'obj',
     'endobj',
@@ -139,19 +154,11 @@ export function isGenuineReadableText(text: string): boolean {
   for (const w of words) {
     if (pdfKeywords.includes(w.toLowerCase())) pdfKeywordHits++;
   }
-  if (pdfKeywordHits / words.length > 0.35) return false;
+  if (words.length > 5 && pdfKeywordHits / words.length > 0.45) return false;
 
-  // 2. Must contain common English or clinical words
-  const commonWords =
-    /\b(the|and|is|in|to|of|for|with|on|at|by|from|this|that|or|an|not|be|are|as|have|has|patient|clinical|management|guideline|symptom|dose|treatment|referral|review|history|exam|acute|chronic|care|skin|rash|lesion|primary|nhs|gp|medicine|disease|infection|blood|notes|session|slides|presentation)\b/i;
-  if (!commonWords.test(text)) return false;
-
-  // 3. Vowel ratio check (natural human language has 22% - 65% vowels among letters)
-  const letters = text.replace(/[^a-zA-Z]/g, '');
-  if (letters.length < 20) return false;
-  const vowels = (letters.match(/[aeiouyAEIOUY]/g) || []).length;
-  const vowelRatio = vowels / letters.length;
-  if (vowelRatio < 0.22 || vowelRatio > 0.65) return false;
+  // 2. Ensure text has a healthy ratio of printable characters
+  const printable = (text.match(/[\x20-\x7E\u00A0-\u024F\r\n\t]/g) || []).length;
+  if (printable / text.length < 0.6) return false;
 
   return true;
 }
@@ -168,9 +175,9 @@ function cleanDocumentText(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  // Cap at 40,000 characters (plenty of context for all 10 clinical sections, under 45 KB)
-  if (cleaned.length > 40000) {
-    return cleaned.slice(0, 40000) + '\n\n[... Document truncated for AI context ...]';
+  // Cap at 50,000 characters (plenty of context for all 10 clinical sections, under 55 KB)
+  if (cleaned.length > 50000) {
+    return cleaned.slice(0, 50000) + '\n\n[... Document truncated for AI context ...]';
   }
   return cleaned;
 }
@@ -179,7 +186,50 @@ function cleanDocumentText(text: string): string {
    PDF IN-BROWSER PARSER (PDFParse v2 with Dual-Engine Fallback)
    ========================================================================= */
 
-async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
+interface PdfBrowserResult {
+  text: string;
+  images?: string[];
+}
+
+/**
+ * Renders PDF pages to off-screen HTML5 <canvas> elements and exports lightweight
+ * compressed JPEGs (~30-40 KB per page). Allows slide decks with flattened graphics
+ * or scanned notes to be analyzed by multimodal vision AI without any upload caps.
+ */
+async function renderPdfPagesToImages(pdf: any, maxPages = 15): Promise<string[]> {
+  if (typeof document === 'undefined') return [];
+  const images: string[] = [];
+  const totalPages = Math.min(pdf.numPages || 1, maxPages);
+
+  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+    try {
+      const page = await pdf.getPage(pageNum);
+      const originalViewport = page.getViewport({ scale: 1.0 });
+      // Scale to target max width 1024px: sharp text legibility for multimodal AI while keeping JPEG size ~30-40 KB
+      const targetWidth = Math.min(originalViewport.width, 1024);
+      const scale = targetWidth / originalViewport.width;
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        if (dataUrl && dataUrl.length > 100) {
+          images.push(dataUrl);
+        }
+      }
+    } catch (renderErr) {
+      console.warn(`Notice rendering page ${pageNum} to image:`, renderErr);
+    }
+  }
+
+  return images;
+}
+
+async function extractPdfInBrowser(buffer: ArrayBuffer): Promise<PdfBrowserResult> {
   // 1. Primary Engine: Mozilla PDF.js (Pre-compiled native browser bundle from /pdf.min.mjs)
   // Handles all complex PDF Object Streams (/ObjStm), ToUnicode CMaps, layout fonts, and multi-page slide decks
   try {
@@ -231,12 +281,20 @@ async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
       }
 
       const fullText = pageTexts.join('\n\n');
-      if (fullText && fullText.trim().length > 30 && isGenuineReadableText(fullText)) {
-        return fullText;
+      // If PDF.js extracted selectable text, return it directly
+      if (fullText && fullText.trim().length >= 10) {
+        return { text: fullText };
+      }
+
+      // If document has no selectable text (scanned graphics or image-only slides),
+      // render pages to lightweight JPEG thumbnails to pass to multimodal AI vision
+      const renderedImages = await renderPdfPagesToImages(pdf, 15);
+      if (renderedImages.length > 0) {
+        return { text: '', images: renderedImages };
       }
     }
   } catch (err) {
-    console.warn('PDF.js text extraction notice:', err);
+    console.warn('PDF.js in-browser notice:', err);
   }
 
   // 2. Secondary Engine: Decompressed /FlateDecode stream extraction
@@ -297,7 +355,6 @@ async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
           }
 
           if (decompressed && decompressed.length > 10) {
-            // Only parse if decompressed stream contains text operators (BT, ET, Tj, TJ)
             if (
               decompressed.includes('BT') ||
               decompressed.includes('Tj') ||
@@ -316,8 +373,12 @@ async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
     pos++;
   }
 
-  // NOTE: Never decode uncompressed raw binary with latin1 to avoid catching binary font/image noise.
-  return outTexts.join(' ');
+  const secondaryText = outTexts.join(' ');
+  if (secondaryText && secondaryText.trim().length >= 10 && isGenuineReadableText(secondaryText)) {
+    return { text: secondaryText };
+  }
+
+  return { text: '' };
 }
 
 function parsePdfOperators(content: string, outTexts: string[]): void {

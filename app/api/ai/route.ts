@@ -566,12 +566,13 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
         .map((p) => `- "${p.title}" (id: "${p.id}", icon: "${p.icon || '📄'}")`)
         .join('\n');
 
+      const hasImages = Array.isArray(images) && images.length > 0;
       const guidelineText = extractedDocText || prompt || '';
-      if (!guidelineText || guidelineText.trim().length < 15) {
+      if ((!guidelineText || guidelineText.trim().length < 10) && !hasImages) {
         return NextResponse.json(
           {
             error:
-              'No readable text could be extracted from the uploaded PDF. Please ensure the PDF is not password-protected or an empty scanned image without OCR.',
+              'No readable text or slide images could be extracted from the uploaded PDF. Please ensure the PDF is not password-protected or empty.',
           },
           { status: 400 }
         );
@@ -662,10 +663,49 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
       let claudePdfError: string | null = null;
       // 1. Complex Medical Reasoning: Execute on Claude Opus 5.5
       try {
+        let claudeMessages: any[] = [];
+        if (hasImages) {
+          const contentParts: any[] = [];
+          if (processedDocText && processedDocText.trim().length > 10) {
+            contentParts.push({
+              type: 'text',
+              text: `CLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
+            });
+          } else {
+            contentParts.push({
+              type: 'text',
+              text: `CLINICAL SLIDE DECK / PRESENTATION IMAGES:\nPlease examine each attached presentation slide image carefully. Transcribe all clinical recommendations, dosages, drug names, diagnostic thresholds, red flags, and lecture pearls, and categorize all conditions discussed under our catalog.`,
+            });
+          }
+          for (const imgStr of (images as string[]).slice(0, 15)) {
+            const comma = imgStr.indexOf(',');
+            const raw = comma !== -1 ? imgStr.slice(comma + 1) : imgStr;
+            const cleanB64 = raw.replace(/[\r\n\s]/g, '');
+            if (cleanB64.length > 50) {
+              contentParts.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/jpeg',
+                  data: cleanB64,
+                },
+              });
+            }
+          }
+          claudeMessages = [{ role: 'user', content: contentParts }];
+        } else {
+          claudeMessages = [
+            {
+              role: 'user',
+              content: `CLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
+            },
+          ];
+        }
+
         const claudeRes = await generateClaudeText({
           model: CLAUDE_MODELS.OPUS,
           system: matchSystemPrompt,
-          messages: [{ role: 'user', content: `CLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""` }],
+          messages: claudeMessages,
           maxTokens: 8192,
           temperature: 0.1,
         });
@@ -681,13 +721,45 @@ Return strictly a valid JSON object matching this schema. Do NOT include markdow
       if (!aiJsonOutput) {
         for (const modelId of CANDIDATE_MODELS) {
           try {
-            const res = await generateText({
-              model: google(modelId),
-              prompt: `${matchSystemPrompt}\n\nCLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
-              temperature: 0.1,
-              providerOptions,
-              maxRetries: 0,
-            });
+            let res: any;
+            if (hasImages) {
+              const geminiParts: any[] = [
+                {
+                  type: 'text',
+                  text: `${matchSystemPrompt}\n\n${
+                    processedDocText && processedDocText.trim().length > 10
+                      ? `CLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`
+                      : 'Please examine the attached presentation slides and extract clinical guidelines according to the instructions above.'
+                  }`,
+                },
+              ];
+              for (const imgStr of (images as string[]).slice(0, 15)) {
+                const comma = imgStr.indexOf(',');
+                const raw = comma !== -1 ? imgStr.slice(comma + 1) : imgStr;
+                const cleanB64 = raw.replace(/[\r\n\s]/g, '');
+                if (cleanB64.length > 50) {
+                  geminiParts.push({
+                    type: 'image',
+                    image: Buffer.from(cleanB64, 'base64'),
+                  });
+                }
+              }
+              res = await generateText({
+                model: google(modelId),
+                messages: [{ role: 'user', content: geminiParts }],
+                temperature: 0.1,
+                providerOptions,
+                maxRetries: 0,
+              });
+            } else {
+              res = await generateText({
+                model: google(modelId),
+                prompt: `${matchSystemPrompt}\n\nCLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
+                temperature: 0.1,
+                providerOptions,
+                maxRetries: 0,
+              });
+            }
             if (res.text && res.text.trim().length > 0) {
               aiJsonOutput = res.text;
               break;

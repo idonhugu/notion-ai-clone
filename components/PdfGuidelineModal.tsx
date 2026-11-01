@@ -315,10 +315,11 @@ export function PdfGuidelineModal({
     setAnalysisProgressMessage('Extracting readable text in browser...');
 
     try {
-      // 1. Attempt client-side extraction first (safely bypasses server upload size limits)
+      // 1. Attempt client-side extraction first (safely bypasses server upload size limits for files of ANY size)
       const extraction = await extractTextFromFileInBrowser(file);
 
-      if (extraction.text && extraction.text.trim().length >= 25) {
+      // Case A: Selectable text was extracted client-side (works for files of ANY size: 11MB, 25MB, 50MB+)
+      if (extraction.text && extraction.text.trim().length >= 10) {
         setAnalysisProgressMessage('Analyzing clinical intelligence with Claude Opus 5.5...');
 
         // If file is reasonably sized (<= 2.5MB), also cache dataUrl for optional PDF attachment
@@ -336,9 +337,18 @@ export function PdfGuidelineModal({
         return;
       }
 
-      // 2. Client-side extraction yielded minimal text (scanned image / non-standard encoding)
-      // If file is under 3MB, fall back to sending DataURL to server/vision engine
-      if (file.size < 3.0 * 1024 * 1024) {
+      // Case B: Document contains flattened slide images / scanned graphics without selectable text.
+      // In-browser canvas renderer compressed slides into lightweight JPEGs (~35 KB/slide, bypassing all upload caps)
+      if (extraction.images && extraction.images.length > 0) {
+        setAnalysisProgressMessage(
+          `Analyzing ${extraction.images.length} slide images with Multimodal AI (Claude Opus 5.5 / Gemini)...`
+        );
+        await handleAnalyzePdfWithImages(extraction.images, file.name, file.size);
+        return;
+      }
+
+      // Case C: Fallback for smaller files under 4MB
+      if (file.size < 4.0 * 1024 * 1024) {
         setAnalysisProgressMessage('Reading file buffer and sending for analysis...');
         const reader = new FileReader();
         reader.onload = () => {
@@ -354,16 +364,63 @@ export function PdfGuidelineModal({
         return;
       }
 
-      // 3. File is large (>= 3MB) with non-extractable text:
-      // Do NOT send 10MB base64 over the wire to avoid HTTP 413 Payload Too Large!
+      // Case D: If client extraction yielded neither text nor images and file is large
       setIsAnalyzing(false);
       setAnalysisError(
-        `This document is ${formatFileSize(file.size)} and appears to contain scanned images or flattened graphics without selectable text. Because server uploads for image-only files are capped at 3MB to prevent timeouts, please copy and paste key lecture notes or slides into the "Paste Notes" tab for instant analysis.`
+        `Unable to extract text or slide images from this document automatically. Please copy and paste key lecture notes, slides, or guidelines into the "Paste Notes" tab for instant analysis.`
       );
     } catch (err: any) {
       console.error('Document analysis error:', err);
       setIsAnalyzing(false);
       setAnalysisError(err?.message || 'Failed to process document.');
+    }
+  };
+
+  const handleAnalyzePdfWithImages = async (
+    images: string[],
+    name: string,
+    size: number
+  ) => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+    setBatchApplySuccess(null);
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'analyze_pdf_for_presentation',
+          images,
+          fileName: name,
+          fileType: 'application/pdf',
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMsg = `Server returned ${res.status}`;
+        if (res.status === 413) {
+          errorMsg = `Server returned 413: Slide images exceeded size limit. Please try pasting notes or uploading a smaller set of slides.`;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          if (errJson.error) errorMsg = errJson.error;
+          else if (res.statusText) errorMsg = `${res.status}: ${res.statusText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.result) {
+        throw new Error(data.error || 'AI did not return structured guideline findings.');
+      }
+
+      setupAnalysisResult(data.result, data.presentations, data.fallbackNotice);
+    } catch (err: any) {
+      console.error('Slide image analysis error:', err);
+      setAnalysisError(err.message || 'Failed to analyze document slides. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
