@@ -355,7 +355,7 @@ export default function Editor({
             icon,
             cover_image: coverImage,
             is_favorite: isFavorite,
-            attachments,
+            attachments: attachmentsRef.current,
             updated_at: new Date().toISOString(),
           };
           updateDocument(doc.id, payload);

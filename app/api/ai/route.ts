@@ -531,22 +531,34 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
     let primaryFileMime = fileType || 'application/pdf';
 
     if (fileData && typeof fileData === 'string') {
+      if (fileData.startsWith('http://') || fileData.startsWith('https://')) {
+        try {
+          const resp = await fetch(fileData);
+          if (resp.ok) {
+            const ab = await resp.arrayBuffer();
+            primaryFileBuffer = Buffer.from(ab);
+            const ct = resp.headers.get('content-type');
+            if (ct) primaryFileMime = ct;
+          }
+        } catch {}
+      } else {
+        // If document is a PDF or image, extract buffer for potential multimodal vision fallback
+        const commaIdx = fileData.indexOf(',');
+        const rawBase64 = commaIdx !== -1 ? fileData.slice(commaIdx + 1) : fileData;
+        try {
+          const cleanB64 = rawBase64.replace(/[\r\n\s]/g, '');
+          primaryFileBuffer = Buffer.from(cleanB64, 'base64');
+          const header = commaIdx !== -1 ? fileData.slice(0, commaIdx) : '';
+          const m = header.match(/^data:([^;]+)/);
+          if (m && m[1]) primaryFileMime = m[1];
+        } catch {}
+      }
+
       extractedDocText = await extractTextFromDataUrl(
         fileData,
         fileName || 'document',
         fileType || ''
       );
-
-      // If document is a PDF or image, extract buffer for potential multimodal vision fallback
-      const commaIdx = fileData.indexOf(',');
-      const rawBase64 = commaIdx !== -1 ? fileData.slice(commaIdx + 1) : fileData;
-      try {
-        const cleanB64 = rawBase64.replace(/[\r\n\s]/g, '');
-        primaryFileBuffer = Buffer.from(cleanB64, 'base64');
-        const header = commaIdx !== -1 ? fileData.slice(0, commaIdx) : '';
-        const m = header.match(/^data:([^;]+)/);
-        if (m && m[1]) primaryFileMime = m[1];
-      } catch {}
     }
 
     // SPECIALIZED CLINICAL ACTION: Analyze clinical guideline PDF and map to GP Common Presentations

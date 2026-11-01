@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { AttachedFile } from '@/lib/types';
 export type { AttachedFile };
+import { uploadFileToStorage } from '@/lib/storage';
 import { DocumentAIModal } from './DocumentAIModal';
 import { PdfPreviewModal } from './PdfPreviewModal';
 
@@ -249,24 +250,28 @@ export function DocumentAttachments({
     onUpdateFiles(updated);
   };
 
-  // Upload Files into Current Folder
-  const handleFileUpload = (uploadedFiles: FileList | null, targetFolderId = currentFolderId) => {
+  // Upload Files into Current Folder using Supabase Storage CDN
+  const handleFileUpload = async (uploadedFiles: FileList | null, targetFolderId = currentFolderId) => {
     if (!uploadedFiles || uploadedFiles.length === 0) return;
     setIsUploading(true);
 
     const fileList = Array.from(uploadedFiles);
-    setUploadProgress(`Reading ${fileList.length} file(s)...`);
+    setUploadProgress(`Uploading ${fileList.length} file(s)...`);
     const newAttachments: AttachedFile[] = [];
 
-    fileList.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
+    try {
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        setUploadProgress(`Uploading ${i + 1}/${fileList.length}: ${file.name}...`);
+
+        const uploaded = await uploadFileToStorage(file);
+
         const fileObj: AttachedFile = {
           id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          url: reader.result as string,
+          name: uploaded.name,
+          size: uploaded.size,
+          type: uploaded.type,
+          url: uploaded.url,
           uploadedAt: new Date().toLocaleDateString(undefined, {
             month: 'short',
             day: 'numeric',
@@ -277,22 +282,15 @@ export function DocumentAttachments({
         };
 
         newAttachments.push(fileObj);
+      }
 
-        if (newAttachments.length === fileList.length) {
-          onUpdateFiles([...files, ...newAttachments]);
-          setIsUploading(false);
-          setUploadProgress(null);
-        }
-      };
-
-      reader.onerror = () => {
-        console.error('Error reading file:', file.name);
-        setIsUploading(false);
-        setUploadProgress(null);
-      };
-
-      reader.readAsDataURL(file);
-    });
+      onUpdateFiles([...files, ...newAttachments]);
+    } catch (err) {
+      console.error('File upload error:', err);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
   };
 
   // Move File to Destination Folder

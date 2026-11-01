@@ -16,17 +16,29 @@ export async function extractTextFromDataUrl(
   }
 
   try {
-    // Robust base64 extraction (never breaks on multi-line base64 or custom mime headers)
-    const commaIdx = dataUrl.indexOf(',');
-    const header = commaIdx !== -1 ? dataUrl.slice(0, commaIdx) : '';
-    const rawBase64 = commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+    let buffer: Buffer;
+    let detectedMime = (fileType || '').toLowerCase();
 
-    const mimeMatch = header.match(/^data:([^;]+)/);
-    const detectedMime = (mimeMatch ? mimeMatch[1] : fileType || '').toLowerCase();
+    if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
+      const resp = await fetch(dataUrl);
+      if (!resp.ok) return '';
+      const ab = await resp.arrayBuffer();
+      buffer = Buffer.from(ab);
+      const ct = resp.headers.get('content-type');
+      if (ct) detectedMime = ct.toLowerCase();
+    } else {
+      // Robust base64 extraction (never breaks on multi-line base64 or custom mime headers)
+      const commaIdx = dataUrl.indexOf(',');
+      const header = commaIdx !== -1 ? dataUrl.slice(0, commaIdx) : '';
+      const rawBase64 = commaIdx !== -1 ? dataUrl.slice(commaIdx + 1) : dataUrl;
 
-    // Strip whitespace/newlines that may be present in base64 strings
-    const cleanBase64 = rawBase64.replace(/[\r\n\s]/g, '');
-    const buffer = Buffer.from(cleanBase64, 'base64');
+      const mimeMatch = header.match(/^data:([^;]+)/);
+      if (mimeMatch) detectedMime = mimeMatch[1].toLowerCase();
+
+      // Strip whitespace/newlines that may be present in base64 strings
+      const cleanBase64 = rawBase64.replace(/[\r\n\s]/g, '');
+      buffer = Buffer.from(cleanBase64, 'base64');
+    }
 
     const isPdf =
       detectedMime.includes('pdf') ||
