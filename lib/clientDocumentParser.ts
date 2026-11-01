@@ -180,46 +180,60 @@ function cleanDocumentText(text: string): string {
    ========================================================================= */
 
 async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
-  // 1. Primary Engine: Mozilla PDF.js (Legacy build with fallback to fake worker)
-  // Handles all complex PDF Object Streams (/ObjStm), ToUnicode CMaps, and layout fonts
+  // 1. Primary Engine: Mozilla PDF.js (Pre-compiled native browser bundle from /pdf.min.mjs)
+  // Handles all complex PDF Object Streams (/ObjStm), ToUnicode CMaps, layout fonts, and multi-page slide decks
   try {
-    const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    let pdfjs: any = null;
 
-    if (typeof window !== 'undefined' && pdfjs.GlobalWorkerOptions) {
-      pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-    }
-
-    const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(buffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-    });
-
-    const pdf = await loadingTask.promise;
-    const pageTexts: string[] = [];
-    const maxPages = Math.min(pdf.numPages || 1, 100);
-
-    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    if (typeof window !== 'undefined') {
       try {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const line = textContent.items
-          .map((item: any) => (item && typeof item.str === 'string' ? item.str : ''))
-          .filter(Boolean)
-          .join(' ');
-
-        if (line.trim().length > 0) {
-          pageTexts.push(`[Slide / Page ${pageNum}]: ${line.trim()}`);
+        // @ts-ignore - runtime native ES module fetch from public static assets
+        pdfjs = await import(/* webpackIgnore: true */ '/pdf.min.mjs');
+        if (pdfjs && pdfjs.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
         }
-      } catch (pageErr) {
-        console.warn(`Notice reading page ${pageNum}:`, pageErr);
+      } catch (e) {
+        console.warn('Native /pdf.min.mjs load notice:', e);
       }
     }
 
-    const fullText = pageTexts.join('\n\n');
-    if (fullText && fullText.trim().length > 30 && isGenuineReadableText(fullText)) {
-      return fullText;
+    if (!pdfjs) {
+      pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    }
+
+    if (pdfjs && typeof pdfjs.getDocument === 'function') {
+      const loadingTask = pdfjs.getDocument({
+        data: new Uint8Array(buffer),
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      });
+
+      const pdf = await loadingTask.promise;
+      const pageTexts: string[] = [];
+      const maxPages = Math.min(pdf.numPages || 1, 120);
+
+      for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+        try {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const line = textContent.items
+            .map((item: any) => (item && typeof item.str === 'string' ? item.str : ''))
+            .filter(Boolean)
+            .join(' ');
+
+          if (line.trim().length > 0) {
+            pageTexts.push(`[Slide / Page ${pageNum}]: ${line.trim()}`);
+          }
+        } catch (pageErr) {
+          console.warn(`Notice reading page ${pageNum}:`, pageErr);
+        }
+      }
+
+      const fullText = pageTexts.join('\n\n');
+      if (fullText && fullText.trim().length > 30 && isGenuineReadableText(fullText)) {
+        return fullText;
+      }
     }
   } catch (err) {
     console.warn('PDF.js text extraction notice:', err);
