@@ -29,6 +29,7 @@ import {
   Check,
   Palette,
   X,
+  Loader2,
 } from 'lucide-react';
 import { AttachedFile } from '@/lib/types';
 export type { AttachedFile };
@@ -72,7 +73,9 @@ export function DocumentAttachments({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDragOverFolderId, setIsDragOverFolderId] = useState<string | null>(null);
 
   // Modals state
   const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
@@ -251,9 +254,11 @@ export function DocumentAttachments({
     if (!uploadedFiles || uploadedFiles.length === 0) return;
     setIsUploading(true);
 
+    const fileList = Array.from(uploadedFiles);
+    setUploadProgress(`Reading ${fileList.length} file(s)...`);
     const newAttachments: AttachedFile[] = [];
 
-    Array.from(uploadedFiles).forEach((file) => {
+    fileList.forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
         const fileObj: AttachedFile = {
@@ -273,10 +278,17 @@ export function DocumentAttachments({
 
         newAttachments.push(fileObj);
 
-        if (newAttachments.length === uploadedFiles.length) {
+        if (newAttachments.length === fileList.length) {
           onUpdateFiles([...files, ...newAttachments]);
           setIsUploading(false);
+          setUploadProgress(null);
         }
+      };
+
+      reader.onerror = () => {
+        console.error('Error reading file:', file.name);
+        setIsUploading(false);
+        setUploadProgress(null);
       };
 
       reader.readAsDataURL(file);
@@ -404,11 +416,22 @@ export function DocumentAttachments({
           {editable && (
             <button
               type="button"
+              disabled={isUploading}
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition shadow-xs cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{currentFolder ? `Upload to ${currentFolder.name}` : 'Upload PDF'}</span>
+              {isUploading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {isUploading
+                  ? (uploadProgress || 'Uploading...')
+                  : currentFolder
+                  ? `Upload to ${currentFolder.name}`
+                  : 'Upload PDF'}
+              </span>
             </button>
           )}
 
@@ -430,7 +453,12 @@ export function DocumentAttachments({
         ref={fileInputRef}
         type="file"
         multiple
-        onChange={(e) => handleFileUpload(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleFileUpload(e.target.files, currentFolderId);
+            e.target.value = '';
+          }
+        }}
         className="hidden"
       />
 
@@ -473,13 +501,33 @@ export function DocumentAttachments({
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    setIsDragOverFolderId(folder.id);
+                  }}
+                  onDragLeave={() => {
+                    setIsDragOverFolderId((prev) => (prev === folder.id ? null : prev));
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleFileUpload(e.dataTransfer.files, folder.id);
+                    setIsDragOverFolderId(null);
+
+                    // 1. Check if dragging an existing file inside the app
+                    const internalFileId = e.dataTransfer.getData('text/plain');
+                    if (internalFileId && files.some((f) => f.id === internalFileId)) {
+                      handleMoveFile(internalFileId, folder.id);
+                      return;
+                    }
+
+                    // 2. Check if dragging files from outside desktop
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      handleFileUpload(e.dataTransfer.files, folder.id);
+                    }
                   }}
-                  className={`group relative flex flex-col justify-between p-3 rounded-xl border ${theme.border} ${theme.bg} hover:shadow-md hover:scale-[1.01] transition-all cursor-pointer`}
+                  className={`group relative flex flex-col justify-between p-3 rounded-xl border ${
+                    isDragOverFolderId === folder.id
+                      ? 'ring-2 ring-blue-500 scale-[1.03] shadow-md border-blue-400 bg-blue-50/80 dark:bg-blue-950/60'
+                      : `${theme.border} ${theme.bg} hover:shadow-md hover:scale-[1.01]`
+                  } transition-all cursor-pointer`}
                 >
                   <div className="flex items-start justify-between gap-1.5">
                     <div className="flex items-center gap-2 min-w-0">
@@ -603,7 +651,11 @@ export function DocumentAttachments({
                 return (
                   <div
                     key={file.id}
-                    className="group relative flex flex-col justify-between p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#202020] hover:border-blue-400 dark:hover:border-blue-700 hover:shadow-md transition"
+                    draggable={editable}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', file.id);
+                    }}
+                    className="group relative flex flex-col justify-between p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#202020] hover:border-blue-400 dark:hover:border-blue-700 hover:shadow-md transition cursor-grab active:cursor-grabbing"
                   >
                     {/* File Header */}
                     <div className="flex items-start justify-between gap-2 mb-2.5">
@@ -635,7 +687,7 @@ export function DocumentAttachments({
                       </div>
 
                       {/* Header Buttons: Preview, Move, Download, Delete */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <div className="flex items-center gap-1 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => setPreviewFile(file)}
@@ -755,7 +807,11 @@ export function DocumentAttachments({
                     return (
                       <tr
                         key={file.id}
-                        className="hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition group"
+                        draggable={editable}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', file.id);
+                        }}
+                        className="hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition group cursor-grab active:cursor-grabbing"
                       >
                         <td className="py-2.5 px-3">
                           <div

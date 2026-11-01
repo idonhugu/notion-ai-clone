@@ -288,7 +288,7 @@ export async function updateDocument(
 
         window.dispatchEvent(
           new CustomEvent('notion:doc_updated', {
-            detail: { id, ...updated },
+            detail: { id, ...updated, _source: 'local_editor' },
           })
         );
       }

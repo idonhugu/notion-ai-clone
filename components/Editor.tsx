@@ -45,6 +45,11 @@ export default function Editor({
   const [coverImage, setCoverImage] = useState<string | null>(initialDoc.cover_image);
   const [isFavorite, setIsFavorite] = useState<boolean>(initialDoc.is_favorite);
   const [attachments, setAttachments] = useState<AttachedFile[]>(initialDoc.attachments || []);
+  const attachmentsRef = useRef<AttachedFile[]>(initialDoc.attachments || []);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
   const [isFullWidth, setIsFullWidth] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'local'>('saved');
@@ -438,7 +443,7 @@ export default function Editor({
             is_favorite:
               updatedFields.is_favorite !== undefined ? updatedFields.is_favorite : isFavorite,
             attachments:
-              updatedFields.attachments !== undefined ? updatedFields.attachments : attachments,
+              updatedFields.attachments !== undefined ? updatedFields.attachments : attachmentsRef.current,
             updated_at: new Date().toISOString(),
           };
 
@@ -458,7 +463,49 @@ export default function Editor({
         }
       }, 1000);
     },
-    [doc.id, title, icon, coverImage, isFavorite, attachments, editor, supabase, onUpdateDocument]
+    [doc.id, title, icon, coverImage, isFavorite, editor, supabase, onUpdateDocument]
+  );
+
+  // Immediate atomic save for file and folder operations (no 1000ms debounce delay)
+  const handleUpdateFiles = useCallback(
+    async (newFiles: AttachedFile[]) => {
+      attachmentsRef.current = newFiles;
+      setAttachments(newFiles);
+
+      // Cancel any pending debounced typing save so it doesn't race or overwrite
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+
+      setSaveStatus('saving');
+      try {
+        const payload = {
+          title,
+          content: editor?.document ?? doc.content ?? [],
+          icon,
+          cover_image: coverImage,
+          is_favorite: isFavorite,
+          attachments: newFiles,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (onUpdateDocument) {
+          onUpdateDocument(payload);
+        }
+
+        const updated = await updateDocument(doc.id, payload);
+        if (updated) {
+          setSaveStatus('saved');
+        } else {
+          setSaveStatus('saved');
+        }
+      } catch (err) {
+        console.error('Error saving attachments immediately:', err);
+        setSaveStatus('error');
+      }
+    },
+    [doc.id, doc.content, title, icon, coverImage, isFavorite, editor, onUpdateDocument]
   );
 
   // Trigger save on editor content change
@@ -513,6 +560,7 @@ export default function Editor({
       uploadedAt: new Date().toISOString(),
     };
     const updated = [...otherAttachments, kanbanEntry];
+    attachmentsRef.current = updated;
     setAttachments(updated);
     saveDocument({ attachments: updated });
   };
@@ -548,6 +596,7 @@ export default function Editor({
     };
 
     const updated = [...otherAttachments, styleEntry];
+    attachmentsRef.current = updated;
     setAttachments(updated);
     saveDocument({ attachments: updated });
   };
@@ -589,6 +638,7 @@ export default function Editor({
     };
 
     const updated = [...otherAttachments, styleEntry];
+    attachmentsRef.current = updated;
     setAttachments(updated);
     saveDocument({ attachments: updated });
   };
@@ -1273,10 +1323,7 @@ export default function Editor({
               {isAttachmentsEnabled && (
                 <DocumentAttachments
                   files={attachments}
-                  onUpdateFiles={(newFiles) => {
-                    setAttachments(newFiles);
-                    saveDocument({ attachments: newFiles });
-                  }}
+                  onUpdateFiles={handleUpdateFiles}
                   onInsertIntoPage={handleInsertAIMarkdown}
                   onCreateSubpageWithNotes={handleCreateSubpageWithNotes}
                   onChatWithDocument={(file) => {
