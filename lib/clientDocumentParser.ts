@@ -180,18 +180,49 @@ function cleanDocumentText(text: string): string {
    ========================================================================= */
 
 async function extractPdfTextInBrowser(buffer: ArrayBuffer): Promise<string> {
-  // 1. Primary Engine: PDFParse v2 (uses pdfjs-dist internally for full CMap, ToUnicode, and font mapping)
+  // 1. Primary Engine: Mozilla PDF.js (Legacy build with fallback to fake worker)
+  // Handles all complex PDF Object Streams (/ObjStm), ToUnicode CMaps, and layout fonts
   try {
-    const { PDFParse } = await import('pdf-parse');
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const res = await parser.getText();
-    if (res && res.text && res.text.trim().length > 30) {
-      if (isGenuineReadableText(res.text)) {
-        return res.text;
+    const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+    if (typeof window !== 'undefined' && pdfjs.GlobalWorkerOptions) {
+      pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+    }
+
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+
+    const pdf = await loadingTask.promise;
+    const pageTexts: string[] = [];
+    const maxPages = Math.min(pdf.numPages || 1, 100);
+
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      try {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const line = textContent.items
+          .map((item: any) => (item && typeof item.str === 'string' ? item.str : ''))
+          .filter(Boolean)
+          .join(' ');
+
+        if (line.trim().length > 0) {
+          pageTexts.push(`[Slide / Page ${pageNum}]: ${line.trim()}`);
+        }
+      } catch (pageErr) {
+        console.warn(`Notice reading page ${pageNum}:`, pageErr);
       }
     }
+
+    const fullText = pageTexts.join('\n\n');
+    if (fullText && fullText.trim().length > 30 && isGenuineReadableText(fullText)) {
+      return fullText;
+    }
   } catch (err) {
-    console.warn('In-browser PDFParse notice:', err);
+    console.warn('PDF.js text extraction notice:', err);
   }
 
   // 2. Secondary Engine: Decompressed /FlateDecode stream extraction
