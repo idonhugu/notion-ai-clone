@@ -54,6 +54,7 @@ interface TopNavProps {
   onManualSync?: () => void;
   onOpenEvidence?: () => void;
   onOpenInteractions?: () => void;
+  onOpenPdfGuideline?: () => void;
 }
 
 export function TopNav({
@@ -79,6 +80,7 @@ export function TopNav({
   onManualSync,
   onOpenEvidence,
   onOpenInteractions,
+  onOpenPdfGuideline,
 }: TopNavProps) {
   const { theme, toggleTheme } = useTheme();
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -206,6 +208,18 @@ export function TopNav({
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             <span className="hidden sm:inline">Interactions</span>
+          </button>
+        )}
+
+        {/* PDF Guideline Sync & Common Presentations Analyzer */}
+        {onOpenPdfGuideline && (
+          <button
+            onClick={onOpenPdfGuideline}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200/60 dark:border-purple-800/60 transition shadow-xs"
+            title="Analyze PDF & Sync into Common Presentations (Cmd+U)"
+          >
+            <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <span className="hidden md:inline">Sync PDF</span>
           </button>
         )}
 

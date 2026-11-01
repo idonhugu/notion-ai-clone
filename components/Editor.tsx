@@ -19,6 +19,7 @@ import { TaskProgressBar } from './TaskProgressBar';
 import { ShortcutsModal } from './ShortcutsModal';
 import { ClinicalEvidenceModal } from './ClinicalEvidenceModal';
 import { StockleysModal } from './StockleysModal';
+import { PdfGuidelineModal } from './PdfGuidelineModal';
 import { SubPagesList } from './SubPagesList';
 import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
@@ -59,6 +60,8 @@ export default function Editor({
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
   const [isInteractionsOpen, setIsInteractionsOpen] = useState(false);
+  const [isPdfGuidelineOpen, setIsPdfGuidelineOpen] = useState(false);
+  const [preloadedPdfFile, setPreloadedPdfFile] = useState<AttachedFile | null>(null);
   const [selectedChatDoc, setSelectedChatDoc] = useState<AttachedFile | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [checklistStats, setChecklistStats] = useState({ total: 0, completed: 0 });
@@ -596,6 +599,12 @@ export default function Editor({
         setIsInteractionsOpen((prev) => !prev);
       }
 
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        setPreloadedPdfFile(null);
+        setIsPdfGuidelineOpen((prev) => !prev);
+      }
+
       if (isCmdOrCtrl && e.key === '/') {
         e.preventDefault();
         setIsShortcutsOpen((prev) => !prev);
@@ -614,15 +623,27 @@ export default function Editor({
       setIsInteractionsOpen(true);
     };
 
+    const handleOpenPdfGuideline = (e?: Event) => {
+      const customEvent = e as CustomEvent<AttachedFile | undefined>;
+      if (customEvent?.detail) {
+        setPreloadedPdfFile(customEvent.detail);
+      } else {
+        setPreloadedPdfFile(null);
+      }
+      setIsPdfGuidelineOpen(true);
+    };
+
     window.addEventListener('keydown', handleGlobalShortcuts);
     window.addEventListener('notion:open_ai_presentation_modal', handleOpenPres);
     window.addEventListener('notion:open_evidence_modal', handleOpenEvidence);
     window.addEventListener('notion:open_stockleys_modal', handleOpenInteractions);
+    window.addEventListener('notion:open_pdf_guideline_modal', handleOpenPdfGuideline);
     return () => {
       window.removeEventListener('keydown', handleGlobalShortcuts);
       window.removeEventListener('notion:open_ai_presentation_modal', handleOpenPres);
       window.removeEventListener('notion:open_evidence_modal', handleOpenEvidence);
       window.removeEventListener('notion:open_stockleys_modal', handleOpenInteractions);
+      window.removeEventListener('notion:open_pdf_guideline_modal', handleOpenPdfGuideline);
     };
   }, []);
 
@@ -957,6 +978,10 @@ export default function Editor({
         onManualSync={handleManualSync}
         onOpenEvidence={() => setIsEvidenceOpen(true)}
         onOpenInteractions={() => setIsInteractionsOpen(true)}
+        onOpenPdfGuideline={() => {
+          setPreloadedPdfFile(null);
+          setIsPdfGuidelineOpen(true);
+        }}
       />
 
       {/* Cover Image banner */}
@@ -1202,6 +1227,21 @@ export default function Editor({
         currentDocTitle={title}
         currentDocContext={docMarkdown}
         onInsertIntoPage={handleInsertAIMarkdown}
+      />
+
+      {/* PDF Guideline Sync & Common Presentations Analyzer Modal */}
+      <PdfGuidelineModal
+        isOpen={isPdfGuidelineOpen}
+        onClose={() => {
+          setIsPdfGuidelineOpen(false);
+          setPreloadedPdfFile(null);
+        }}
+        preloadedFile={preloadedPdfFile}
+        onPresentationUpdated={(id) => {
+          if (doc.id === id) {
+            handleManualSync();
+          }
+        }}
       />
     </div>
   );

@@ -15,6 +15,7 @@ import {
   Sparkles,
   BookOpen,
   MessageSquare,
+  Stethoscope,
 } from 'lucide-react';
 import { DocumentAIModal } from './DocumentAIModal';
 
@@ -256,6 +257,22 @@ export function DocumentAttachments({
                     <BookOpen className="w-3 h-3 text-neutral-500" />
                     <span>Notes</span>
                   </button>
+
+                  {isPdf && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.dispatchEvent(
+                          new CustomEvent('notion:open_pdf_guideline_modal', { detail: file })
+                        );
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/60 dark:border-emerald-800/60 transition shadow-2xs"
+                      title="Analyze this guideline PDF and sync into Common Presentations"
+                    >
+                      <Stethoscope className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      <span>Sync to Pres</span>
+                    </button>
+                  )}
 
                   {onChatWithDocument && (
                     <button

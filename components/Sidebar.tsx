@@ -353,6 +353,24 @@ export function Sidebar({
           </span>
         </button>
 
+        {/* PDF Guideline Sync & Common Presentations Analyzer */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('notion:open_pdf_guideline_modal'));
+            setIsMobileOpen(false);
+          }}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition font-medium"
+          title="Analyze PDF & Sync to Common Presentations (Cmd+U)"
+        >
+          <div className="flex items-center gap-2">
+            <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            <span>Sync Guideline PDF</span>
+          </div>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-semibold">
+            NICE / ICB
+          </span>
+        </button>
+
         {/* New Page button */}
         <button
           onClick={() => handleCreateDocument()}

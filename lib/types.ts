@@ -14,6 +14,7 @@ export type AIAction =
   | 'add_presentation'
   | 'clinical_evidence'
   | 'stockleys_checker'
+  | 'analyze_pdf_for_presentation'
   | 'fix_grammar'
   | 'doc_summarize'
   | 'doc_notes';

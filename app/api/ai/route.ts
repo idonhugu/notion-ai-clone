@@ -513,6 +513,152 @@ Return ONLY valid JSON. Do not include markdown code fences or conversational pr
       } catch {}
     }
 
+    // SPECIALIZED CLINICAL ACTION: Analyze clinical guideline PDF and map to GP Common Presentations
+    if (action === 'analyze_pdf_for_presentation') {
+      const supabase = getAdminClient();
+      const COMMON_PARENT_ID = '74ae5917-c661-4e8e-b993-d9aa5052185f';
+
+      // 1. Fetch all 180+ Common Presentations from Supabase
+      const { data: commonDocs } = await supabase
+        .from('documents')
+        .select('id, title, icon')
+        .eq('parent_id', COMMON_PARENT_ID)
+        .eq('is_archived', false)
+        .order('title', { ascending: true });
+
+      const presentationsList = commonDocs || [];
+      const catalogSummary = presentationsList
+        .map((p) => `- "${p.title}" (id: "${p.id}", icon: "${p.icon || '📄'}")`)
+        .join('\n');
+
+      const guidelineText = extractedDocText || prompt || '';
+      if (!guidelineText || guidelineText.trim().length < 15) {
+        return NextResponse.json(
+          {
+            error:
+              'No readable text could be extracted from the uploaded PDF. Please ensure the PDF is not password-protected or an empty scanned image without OCR.',
+          },
+          { status: 400 }
+        );
+      }
+
+      // Truncate cleanly if document is massive while preserving beginning, middle, and end
+      let processedDocText = guidelineText;
+      if (processedDocText.length > 40000) {
+        const head = processedDocText.slice(0, 20000);
+        const tail = processedDocText.slice(-15000);
+        processedDocText = `${head}\n\n[... middle sections omitted for length ...]\n\n${tail}`;
+      }
+
+      const matchSystemPrompt = `You are a Senior NHS General Practice Medical Editor and Clinical Decision Support Specialist.
+You are analyzing a clinical guideline document (file: "${fileName || 'Clinical Guideline.pdf'}").
+Your mission is to analyze the guideline, match it to the most appropriate condition among our 180+ GP Common Presentations knowledge base, and extract comprehensive, consultation-ready medical intelligence.
+
+OUR GP COMMON PRESENTATIONS CATALOG:
+${catalogSummary}
+
+INSTRUCTIONS:
+1. MATCHING:
+   - Identify which existing Common Presentation is the best match. Select its exact title, ID, and icon from the catalog.
+   - If the guideline covers multiple topics or doesn't match an existing title closely (e.g. "Psoriatic Arthritis" or "Paediatric Food Allergy"), you can specify "matchedPresentationId": null, and suggest a concise title and appropriate medical emoji icon.
+   - Provide a 1-2 sentence "matchReason" explaining the clinical link.
+   - Rate confidence: "high" (direct 1:1 match), "medium" (covers related area), or "low" (novel condition).
+   - "suggestedAction": "merge" (if existing match found) or "create" (if new condition).
+
+2. CLINICAL INTELLIGENCE EXTRACTION:
+   Extract high-yield clinical recommendations strictly relevant to UK Primary Care General Practice (NICE CKS / RCGP standard).
+   Categorize into:
+   - "history": Key diagnostic questions, symptom characteristics, risk factors, screening criteria, and red flags.
+   - "examination": Physical examination steps, vital sign thresholds, specific clinical tests, and physical red flags.
+   - "investigations": Point-of-care / bedside tests, primary care bloods with diagnostic thresholds, sputum/urine tests, and imaging indications.
+   - "differentials": Key common and alternative differential diagnoses mentioned or implied.
+   - "rare": Life-threatening emergencies, occult malignancies, acute complications, or not-to-miss mimics.
+   - "plan": Actionable primary care management! Include exact UK British National Formulary (BNF) drug names, specific dosages, frequencies, treatment durations, first-line vs second-line, and non-pharmacological/lifestyle measures.
+   - "safetynetting": Explicit red-flag warning signs and patient instructions on when to seek urgent emergency care.
+   - "followup": Planned review timeframes, monitoring bloods, intervals, and criteria for stopping/stepping down therapy.
+   - "referral": Specific thresholds for 2-Week Wait (2WW) suspected cancer referral, emergency same-day admission, and routine outpatient specialist clinic referral.
+   - "clinicalPearls": Practical clinical tips, local formulary quirks, diagnostic pearls, or common prescribing pitfalls highlighted in the text.
+
+3. METADATA:
+   - "guidelineTitle": Official title of the guideline/document (e.g. "NICE NG198: Acne Vulgaris" or "British Thoracic Society Adult Asthma Guideline 2024").
+   - "issuingAuthority": Organization (e.g. "NICE", "BTS / SIGN", "RCGP", "NHS England", "Local ICB / Trust").
+
+OUTPUT FORMAT:
+Return strictly a valid JSON object matching this schema. Do NOT include markdown code fences (\`\`\`json) or conversational prose:
+{
+  "guidelineTitle": "string",
+  "issuingAuthority": "string",
+  "matchedPresentationId": "uuid or null",
+  "matchedPresentationTitle": "string",
+  "matchedPresentationIcon": "string",
+  "confidence": "high" | "medium" | "low",
+  "matchReason": "string",
+  "suggestedAction": "merge" | "create",
+  "sections": {
+    "history": ["item 1", "item 2"],
+    "examination": ["item 1", "item 2"],
+    "investigations": ["item 1", "item 2"],
+    "differentials": ["item 1", "item 2"],
+    "rare": ["item 1", "item 2"],
+    "plan": ["item 1", "item 2"],
+    "safetynetting": ["item 1", "item 2"],
+    "followup": ["item 1", "item 2"],
+    "referral": ["item 1", "item 2"],
+    "clinicalPearls": ["item 1", "item 2"]
+  }
+}`;
+
+      let aiJsonOutput = '';
+      for (const modelId of CANDIDATE_MODELS) {
+        try {
+          const res = await generateText({
+            model: google(modelId),
+            prompt: `${matchSystemPrompt}\n\nCLINICAL GUIDELINE TEXT:\n"""\n${processedDocText}\n"""`,
+            temperature: 0.1,
+            providerOptions,
+            maxRetries: 0,
+          });
+          if (res.text && res.text.trim().length > 0) {
+            aiJsonOutput = res.text;
+            break;
+          }
+        } catch (err) {
+          console.warn(`generateText notice on ${modelId} for PDF guideline analysis:`, err);
+        }
+      }
+
+      if (!aiJsonOutput) {
+        return NextResponse.json(
+          { error: 'AI analysis could not complete. Please retry in a moment.' },
+          { status: 500 }
+        );
+      }
+
+      try {
+        const clean = aiJsonOutput
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+        const parsedResult = JSON.parse(clean);
+
+        return NextResponse.json({
+          success: true,
+          result: parsedResult,
+          presentations: presentationsList,
+        });
+      } catch (parseErr) {
+        console.error('Failed to parse guideline analysis JSON:', parseErr, aiJsonOutput);
+        return NextResponse.json(
+          {
+            error: 'Failed to parse structured guideline data from AI response.',
+            rawOutput: aiJsonOutput,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     // Extract text from attached docs bundle if provided
     const attachedTextSnippets: string[] = [];
     if (Array.isArray(attachedDocs) && attachedDocs.length > 0) {
