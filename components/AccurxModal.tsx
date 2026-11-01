@@ -24,7 +24,9 @@ import {
 import {
   ACCURX_SNIPPETS,
   ACCURX_CATEGORIES,
+  ACCURX_AUTHORITIES,
   AccurxSnippet,
+  LeafletAuthority,
 } from '@/lib/accurxSnippets';
 
 interface AccurxModalProps {
@@ -48,6 +50,7 @@ export function AccurxModal({
 
   // Library filters
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedAuthority, setSelectedAuthority] = useState<string>('All Authorities');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Quick variables for dynamic substitution
@@ -118,12 +121,23 @@ export function AccurxModal({
     return { chars, segments };
   };
 
-  // Filter snippets based on category, search query, and current document context
+  // Filter snippets based on category, authority, search query, and current document context
   const filteredSnippets = useMemo(() => {
     let list = ACCURX_SNIPPETS;
 
     if (selectedCategory !== 'All') {
       list = list.filter((s) => s.category === selectedCategory);
+    }
+
+    if (selectedAuthority !== 'All Authorities') {
+      list = list.filter((s) => {
+        if (selectedAuthority === 'BAD (Dermatology)') return s.authority === 'BAD';
+        if (selectedAuthority === "RCOG (Women's Health)") return s.authority === 'RCOG';
+        if (selectedAuthority === 'Versus Arthritis') return s.authority === 'Versus Arthritis';
+        if (selectedAuthority === 'Asthma + Lung UK') return s.authority === 'Asthma + Lung UK';
+        if (selectedAuthority === 'NHS UK') return s.authority === 'NHS' || !s.authority;
+        return true;
+      });
     }
 
     if (searchQuery.trim()) {
@@ -133,13 +147,14 @@ export function AccurxModal({
           s.title.toLowerCase().includes(q) ||
           s.smsTemplate.toLowerCase().includes(q) ||
           s.pilTitle.toLowerCase().includes(q) ||
+          (s.authority && s.authority.toLowerCase().includes(q)) ||
           s.tags.some((t) => t.toLowerCase().includes(q)) ||
           s.safetyNetting.toLowerCase().includes(q)
       );
     }
 
     return list;
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, selectedAuthority, searchQuery]);
 
   // Contextual matches for the currently active presentation document
   const contextualSnippets = useMemo(() => {
@@ -178,10 +193,10 @@ export function AccurxModal({
     const processedNote = substitutePlaceholders(snippet.suggestedConsultationNote);
 
     const markdownToInsert = `
-> 📱 **Accurx SMS Message Sent (${snippet.category}):**
+> 📱 **Accurx SMS Message Sent (${snippet.category} · ${snippet.authority || 'NHS'} Leaflet):**
 > "${processedSms}"
 >
-> 📚 **Verified NHS PIL:** [${snippet.pilTitle}](${snippet.pilUrl})
+> 📚 **Official ${snippet.authority || 'NHS'} PIL:** [${snippet.pilTitle}](${snippet.pilUrl})
 > 📝 **EHR Consultation Record:** \`${processedNote}\`
 `;
     onInsertIntoPage(markdownToInsert);
@@ -301,6 +316,38 @@ ${aiStreamedOutput}
 
   const PRESET_PROMPTS = [
     {
+      label: 'BAD: Eczema & Steroid FTUs',
+      prompt: 'Atopic eczema flare in 6yo child. Advise on topical corticosteroid fingertip unit (FTU) rules, generous emollient application 30 mins apart, and link official British Association of Dermatologists (BAD) leaflet.',
+    },
+    {
+      label: 'BAD: Acne & Topical Retinoid',
+      prompt: 'Starting Epiduo (Adapalene/Benzoyl Peroxide) for facial acne. Warn about initial retinoid purge/dryness, advise pea-sized amount at night, non-comedogenic moisturiser, and link official BAD acne leaflet.',
+    },
+    {
+      label: 'RCOG: Endometriosis & Pelvic Pain',
+      prompt: 'Patient with chronic cyclic pelvic pain and dysmenorrhoea investigated for endometriosis. Advise on first-line hormonal suppression (combined pill / POP), pain relief, and link official RCOG endometriosis patient leaflet.',
+    },
+    {
+      label: 'RCOG: Menopause & HRT Safety',
+      prompt: 'Perimenopausal vasomotor symptoms: starting transdermal HRT (oestrogen patch + micronised progesterone Utrogestan). Explain unscheduled bleeding expectations and link official RCOG / BMS menopause leaflet.',
+    },
+    {
+      label: 'RCOG: Early Miscarriage Support',
+      prompt: 'Patient experiencing early miscarriage before 12 weeks managed expectantly. Provide compassionate support, bleeding timeline, red flag infection/haemorrhage warnings, and official RCOG early miscarriage leaflet.',
+    },
+    {
+      label: 'Versus Arthritis: Osteoarthritis Knee',
+      prompt: 'Knee osteoarthritis: explain why movement is medicine ("motion is lotion"), quad strengthening, weight management, topical NSAID gel, and link official Versus Arthritis knee osteoarthritis leaflet.',
+    },
+    {
+      label: 'Versus Arthritis: Gout & Allopurinol',
+      prompt: 'Gout management: starting Allopurinol 100mg with flare prophylaxis cover. Explain long-term crystal dissolution pool and link official Versus Arthritis gout leaflet.',
+    },
+    {
+      label: 'Asthma + Lung UK: Inhaler Technique',
+      prompt: 'Asthma review: advised on spacer use, MART regime or preventer adherence, personal asthma action plan, and link official Asthma + Lung UK guidance.',
+    },
+    {
       label: 'Ramipril Start & Bloods',
       prompt: 'Starting Ramipril 2.5mg once daily for hypertension. Remind to book U&E bloods in 2 weeks. Warn about dry cough and dizziness.',
     },
@@ -309,20 +356,8 @@ ${aiStreamedOutput}
       prompt: 'Delayed antibiotic for 4yo with earache / tonsillitis. Advise Calpol/Nurofen, collect amoxicillin only if no improvement after 48 hours.',
     },
     {
-      label: 'Eczema Flare & Steroid Rules',
-      prompt: 'Hydrocortisone 1% cream once daily for 1-2 weeks for eczema flare. Explain Fingertip Unit rule and generous moisturiser 30 mins apart.',
-    },
-    {
       label: 'Back Pain & Cauda Equina',
       prompt: 'Acute lower back pain advice: keep gently mobile, paracetamol, heat pack. Explicitly list Cauda Equina red flags (numbness in groin/saddle, bladder/bowel incontinence).',
-    },
-    {
-      label: 'IAPT Talking Therapies',
-      prompt: 'Anxiety and low mood support: send NHS Talking Therapies self-referral link and Samaritans 116 123 / 111 crisis contacts.',
-    },
-    {
-      label: 'Normal Bloods Reassurance',
-      prompt: 'Recent blood test results reviewed and all completely normal. No action needed unless original symptoms persist.',
     },
   ];
 
@@ -343,11 +378,11 @@ ${aiStreamedOutput}
                   Accurx & SMS Snippet Library
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                  NHS Verified PILs
+                  BAD · RCOG · NHS Leaflets
                 </span>
               </div>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-400 hidden sm:block">
-                Ready-to-copy SMS templates with verified NHS self-care links, or ask AI to generate custom snippets.
+                Ready-to-copy SMS templates with official BAD, RCOG, Versus Arthritis, and NHS patient information leaflets.
               </p>
             </div>
           </div>
@@ -453,8 +488,54 @@ ${aiStreamedOutput}
                 </div>
               </div>
 
+              {/* AUTHORITY FILTER TABS */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+                  <Filter className="w-3 h-3 text-neutral-400" />
+                  College Leaflet:
+                </span>
+                {ACCURX_AUTHORITIES.map((auth) => {
+                  const isSelected = selectedAuthority === auth;
+                  let selectedStyle = 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-2xs';
+                  if (auth.startsWith('BAD')) {
+                    selectedStyle = 'bg-rose-600 text-white shadow-2xs';
+                  } else if (auth.startsWith('RCOG')) {
+                    selectedStyle = 'bg-purple-600 text-white shadow-2xs';
+                  } else if (auth.startsWith('Versus')) {
+                    selectedStyle = 'bg-teal-600 text-white shadow-2xs';
+                  } else if (auth.startsWith('Asthma')) {
+                    selectedStyle = 'bg-sky-600 text-white shadow-2xs';
+                  } else if (auth === 'NHS UK') {
+                    selectedStyle = 'bg-blue-600 text-white shadow-2xs';
+                  }
+
+                  return (
+                    <button
+                      key={auth}
+                      type="button"
+                      onClick={() => setSelectedAuthority(auth)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? selectedStyle
+                          : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                      }`}
+                    >
+                      {auth.startsWith('BAD') && <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />}
+                      {auth.startsWith('RCOG') && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
+                      {auth.startsWith('Versus') && <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
+                      {auth.startsWith('Asthma') && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
+                      {auth === 'NHS UK' && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />}
+                      <span>{auth}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* CATEGORY FILTER TABS */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider shrink-0 mr-1">
+                  Category:
+                </span>
                 {ACCURX_CATEGORIES.map((cat) => {
                   const isSelected = selectedCategory === cat;
                   return (
@@ -526,6 +607,37 @@ ${aiStreamedOutput}
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200/60 dark:border-neutral-700/60">
                               {snippet.category}
                             </span>
+                            {/* Leaflet Authority Badge */}
+                            {snippet.authority === 'BAD' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/80 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                BAD Leaflet
+                              </span>
+                            )}
+                            {snippet.authority === 'RCOG' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                RCOG Leaflet
+                              </span>
+                            )}
+                            {snippet.authority === 'Versus Arthritis' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                                Versus Arthritis
+                              </span>
+                            )}
+                            {snippet.authority === 'Asthma + Lung UK' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/80 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                Asthma + Lung UK
+                              </span>
+                            )}
+                            {(!snippet.authority || snippet.authority === 'NHS') && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                NHS Leaflet
+                              </span>
+                            )}
                             {isContextMatch && (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300">
                                 ⭐ Page Match
@@ -547,10 +659,10 @@ ${aiStreamedOutput}
                           </div>
                         </div>
 
-                        {/* Verified NHS PIL Link */}
+                        {/* Verified Specialist College / NHS Leaflet Link */}
                         <div className="flex items-center gap-1.5 text-xs">
                           <span className="text-[11px] font-semibold text-neutral-500">
-                            Verified NHS Leaflet:
+                            Official {snippet.authority || 'NHS'} Leaflet:
                           </span>
                           <a
                             href={snippet.pilUrl}
@@ -602,8 +714,12 @@ ${aiStreamedOutput}
                               href={snippet.pilUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/40 transition"
-                              title={`Open ${snippet.pilTitle} on NHS.uk`}
+                              className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer pointer-events-auto"
+                              title={`Open ${snippet.pilTitle} (${snippet.authority || 'NHS'})`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(snippet.pilUrl, '_blank', 'noopener,noreferrer');
+                              }}
                             >
                               <ExternalLink className="w-3 h-3" />
                               <span>Open Leaflet</span>
@@ -795,11 +911,15 @@ ${aiStreamedOutput}
                           href={extractedPilUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition"
-                          title="Open verified NHS leaflet in new tab"
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900 transition cursor-pointer"
+                          title="Open verified leaflet in new tab"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(extractedPilUrl, '_blank', 'noopener,noreferrer');
+                          }}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Open NHS Leaflet</span>
+                          <span>Open Leaflet</span>
                         </a>
                       )}
 
@@ -848,7 +968,7 @@ ${aiStreamedOutput}
           <div className="flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5 text-blue-500" />
             <span>
-              All PIL URLs verified against official NHS.uk and Patient.info UK clinical guidance.
+              All PIL URLs verified against official BAD (British Association of Dermatologists), RCOG (Obstetricians & Gynaecologists), Versus Arthritis, and NHS UK clinical guidance.
             </span>
           </div>
 
@@ -918,6 +1038,28 @@ function formatAccurxHtml(rawMarkdown: string): string {
   // Format Headings
   html = html.replace(/^### (.*$)/gim, '<h3 class="text-xs font-bold text-blue-700 dark:text-blue-300 mt-3.5 mb-1 flex items-center gap-1.5">$1</h3>');
   html = html.replace(/^## (.*$)/gim, '<h2 class="text-sm font-bold text-neutral-900 dark:text-neutral-100 mt-4 mb-2">$1</h2>');
+
+  // Format Issuing Authority lines with badge styling
+  html = html.replace(
+    /\*\*Issuing Authority:\*\*\s*(BAD[^\n<]*)/gi,
+    '**Issuing Authority:** <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">$1</span>'
+  );
+  html = html.replace(
+    /\*\*Issuing Authority:\*\*\s*(RCOG[^\n<]*)/gi,
+    '**Issuing Authority:** <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">$1</span>'
+  );
+  html = html.replace(
+    /\*\*Issuing Authority:\*\*\s*(Versus Arthritis[^\n<]*)/gi,
+    '**Issuing Authority:** <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">$1</span>'
+  );
+  html = html.replace(
+    /\*\*Issuing Authority:\*\*\s*(Asthma \+ Lung UK[^\n<]*)/gi,
+    '**Issuing Authority:** <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">$1</span>'
+  );
+  html = html.replace(
+    /\*\*Issuing Authority:\*\*\s*(NHS[^\n<]*)/gi,
+    '**Issuing Authority:** <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">$1</span>'
+  );
 
   // Format bold
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-neutral-900 dark:text-neutral-100">$1</strong>');
