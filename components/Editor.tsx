@@ -21,6 +21,7 @@ import { ClinicalEvidenceModal } from './ClinicalEvidenceModal';
 import { StockleysModal } from './StockleysModal';
 import { PdfGuidelineModal } from './PdfGuidelineModal';
 import { DermEvidenceModal } from './DermEvidenceModal';
+import { ErrorBoundary } from './ErrorBoundary';
 import { SubPagesList } from './SubPagesList';
 import { EditorToolbar } from './EditorToolbar';
 import { useTheme } from './ThemeProvider';
@@ -87,8 +88,10 @@ export default function Editor({
   // Font family and sizing
   const [fontStyle, setFontStyle] = useState<NotionFontStyle>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`notion_font_${initialDoc.id}`);
-      if (saved === 'sans' || saved === 'serif' || saved === 'mono') return saved;
+      try {
+        const saved = localStorage.getItem(`notion_font_${initialDoc.id}`);
+        if (saved === 'sans' || saved === 'serif' || saved === 'mono') return saved;
+      } catch {}
     }
     const entry = (initialDoc.attachments || []).find((f: any) => f.id === '__page_style__');
     if (entry && entry.url) {
@@ -102,8 +105,10 @@ export default function Editor({
 
   const [isSmallText, setIsSmallText] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`notion_small_text_${initialDoc.id}`);
-      if (saved !== null) return saved === 'true';
+      try {
+        const saved = localStorage.getItem(`notion_small_text_${initialDoc.id}`);
+        if (saved !== null) return saved === 'true';
+      } catch {}
     }
     const entry = (initialDoc.attachments || []).find((f: any) => f.id === '__page_style__');
     if (entry && entry.url) {
@@ -442,8 +447,10 @@ export default function Editor({
     setIsSmallText(newSmallText);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`notion_font_${doc.id}`, newFont);
-      localStorage.setItem(`notion_small_text_${doc.id}`, String(newSmallText));
+      try {
+        localStorage.setItem(`notion_font_${doc.id}`, newFont);
+        localStorage.setItem(`notion_small_text_${doc.id}`, String(newSmallText));
+      } catch {}
     }
 
     const otherAttachments = attachments.filter((f) => f.id !== '__page_style__');
@@ -1224,49 +1231,57 @@ export default function Editor({
       />
 
       {/* Heidi Clinical Evidence Decision Support & Calculators Modal */}
-      <ClinicalEvidenceModal
-        isOpen={isEvidenceOpen}
-        onClose={() => setIsEvidenceOpen(false)}
-        currentDocId={doc.id}
-        currentDocTitle={title}
-        currentDocContext={docMarkdown}
-        onInsertIntoPage={handleInsertAIMarkdown}
-      />
+      <ErrorBoundary fallbackTitle="Clinical Evidence Support Error">
+        <ClinicalEvidenceModal
+          isOpen={isEvidenceOpen}
+          onClose={() => setIsEvidenceOpen(false)}
+          currentDocId={doc.id}
+          currentDocTitle={title}
+          currentDocContext={docMarkdown}
+          onInsertIntoPage={handleInsertAIMarkdown}
+        />
+      </ErrorBoundary>
 
       {/* Stockley's Drug Interactions Checker Modal */}
-      <StockleysModal
-        isOpen={isInteractionsOpen}
-        onClose={() => setIsInteractionsOpen(false)}
-        currentDocId={doc.id}
-        currentDocTitle={title}
-        currentDocContext={docMarkdown}
-        onInsertIntoPage={handleInsertAIMarkdown}
-      />
+      <ErrorBoundary fallbackTitle="Stockley's Interactions Checker Error">
+        <StockleysModal
+          isOpen={isInteractionsOpen}
+          onClose={() => setIsInteractionsOpen(false)}
+          currentDocId={doc.id}
+          currentDocTitle={title}
+          currentDocContext={docMarkdown}
+          onInsertIntoPage={handleInsertAIMarkdown}
+        />
+      </ErrorBoundary>
 
       {/* PDF Guideline Sync & Common Presentations Analyzer Modal */}
-      <PdfGuidelineModal
-        isOpen={isPdfGuidelineOpen}
-        onClose={() => {
-          setIsPdfGuidelineOpen(false);
-          setPreloadedPdfFile(null);
-        }}
-        preloadedFile={preloadedPdfFile}
-        onPresentationUpdated={(id) => {
-          if (doc.id === id) {
-            handleManualSync();
-          }
-        }}
-      />
+      <ErrorBoundary fallbackTitle="PDF Guideline Sync Error">
+        <PdfGuidelineModal
+          isOpen={isPdfGuidelineOpen}
+          onClose={() => {
+            setIsPdfGuidelineOpen(false);
+            setPreloadedPdfFile(null);
+          }}
+          preloadedFile={preloadedPdfFile}
+          onPresentationUpdated={(id) => {
+            if (doc.id === id) {
+              handleManualSync();
+            }
+          }}
+        />
+      </ErrorBoundary>
 
       {/* Derm Evidence & Photo Analysis Modal */}
-      <DermEvidenceModal
-        isOpen={isDermEvidenceOpen}
-        onClose={() => setIsDermEvidenceOpen(false)}
-        currentDocId={doc.id}
-        currentDocTitle={title}
-        currentDocContext={docMarkdown}
-        onInsertIntoPage={handleInsertAIMarkdown}
-      />
+      <ErrorBoundary fallbackTitle="Derm Evidence & Photos Error">
+        <DermEvidenceModal
+          isOpen={isDermEvidenceOpen}
+          onClose={() => setIsDermEvidenceOpen(false)}
+          currentDocId={doc.id}
+          currentDocTitle={title}
+          currentDocContext={docMarkdown}
+          onInsertIntoPage={handleInsertAIMarkdown}
+        />
+      </ErrorBoundary>
     </div>
   );
 }

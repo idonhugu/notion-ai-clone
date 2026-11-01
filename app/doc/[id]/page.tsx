@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import nextDynamic from 'next/dynamic';
 import { WorkspaceLayout } from '@/components/WorkspaceLayout';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Document } from '@/lib/types';
 import { fetchDocumentById } from '@/lib/api/documents';
 import { Loader2, ArrowLeft } from 'lucide-react';
@@ -46,8 +47,10 @@ function DocumentContent() {
           setParentDocument(parentData);
           setNotFound(false);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('notion_last_active_doc', docData.id);
-            localStorage.setItem('notion_last_active_time', String(Date.now()));
+            try {
+              localStorage.setItem('notion_last_active_doc', docData.id);
+              localStorage.setItem('notion_last_active_time', String(Date.now()));
+            } catch {}
           }
         } else {
           setNotFound(true);
@@ -100,17 +103,19 @@ function DocumentContent() {
 
   return (
     <WorkspaceLayout activeDocId={document.id} initialDoc={document}>
-      <Editor
-        key={document.id}
-        document={document}
-        parentDocument={parentDocument}
-        onDelete={(delId) => {
-          router.push('/');
-        }}
-        onUpdateDocument={(updated) => {
-          setDocument((prev) => (prev ? { ...prev, ...updated } : null));
-        }}
-      />
+      <ErrorBoundary fallbackTitle="Clinical Document Error" fallbackMessage="Could not render this clinical document view.">
+        <Editor
+          key={document.id}
+          document={document}
+          parentDocument={parentDocument}
+          onDelete={(delId) => {
+            router.push('/');
+          }}
+          onUpdateDocument={(updated) => {
+            setDocument((prev) => (prev ? { ...prev, ...updated } : null));
+          }}
+        />
+      </ErrorBoundary>
     </WorkspaceLayout>
   );
 }

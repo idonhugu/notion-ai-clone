@@ -183,8 +183,10 @@ export function AIChatSidecar({
   const [isDocDropdownOpen, setIsDocDropdownOpen] = useState(false);
   const [includeSources, setIncludeSources] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('notion_ai_cite_sources');
-      return saved !== null ? saved === 'true' : true;
+      try {
+        const saved = localStorage.getItem('notion_ai_cite_sources');
+        return saved !== null ? saved === 'true' : true;
+      } catch {}
     }
     return true;
   });

@@ -220,7 +220,10 @@ export async function createDocument(
   }
 
   // Offline / local fallback with valid UUID
-  const localId = crypto.randomUUID();
+  const localId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
   const fallback: Document = {
     id: localId,
     user_id: 'admin-user',

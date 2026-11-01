@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import nextDynamic from 'next/dynamic';
 import { WorkspaceLayout } from '@/components/WorkspaceLayout';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Document } from '@/lib/types';
 import { fetchAllDocuments, fetchDocumentById, DEFAULT_STARTER_DOC } from '@/lib/api/documents';
 import { Loader2 } from 'lucide-react';
@@ -44,13 +45,15 @@ export default function HomePage() {
         // If user actively navigated to a doc on this device within the last 15 minutes, keep it; otherwise open the freshest cloud doc
         let targetDoc: Document = sorted[0];
         if (typeof window !== 'undefined') {
-          const lastActiveId = localStorage.getItem('notion_last_active_doc');
-          const lastActiveTime = localStorage.getItem('notion_last_active_time');
-          const isRecent = lastActiveTime && Date.now() - Number(lastActiveTime) < 15 * 60 * 1000;
-          if (isRecent && lastActiveId) {
-            const matched = activeDocs.find((d) => d.id === lastActiveId);
-            if (matched) targetDoc = matched;
-          }
+          try {
+            const lastActiveId = localStorage.getItem('notion_last_active_doc');
+            const lastActiveTime = localStorage.getItem('notion_last_active_time');
+            const isRecent = lastActiveTime && Date.now() - Number(lastActiveTime) < 15 * 60 * 1000;
+            if (isRecent && lastActiveId) {
+              const matched = activeDocs.find((d) => d.id === lastActiveId);
+              if (matched) targetDoc = matched;
+            }
+          } catch {}
         }
 
         const chosen = targetDoc || activeDocs[0];
@@ -99,13 +102,15 @@ export default function HomePage() {
 
   return (
     <WorkspaceLayout activeDocId={currentDoc.id} initialDoc={currentDoc}>
-      <Editor
-        key={currentDoc.id}
-        document={currentDoc}
-        onUpdateDocument={(updated) => {
-          setCurrentDoc((prev) => (prev ? { ...prev, ...updated } : null));
-        }}
-      />
+      <ErrorBoundary fallbackTitle="Clinical Document Error" fallbackMessage="Could not render this clinical document view.">
+        <Editor
+          key={currentDoc.id}
+          document={currentDoc}
+          onUpdateDocument={(updated) => {
+            setCurrentDoc((prev) => (prev ? { ...prev, ...updated } : null));
+          }}
+        />
+      </ErrorBoundary>
     </WorkspaceLayout>
   );
 }

@@ -33,13 +33,13 @@ export function WorkspaceLayout({
   // Load user info & documents with multi-device Supabase Realtime & mobile auto-sync
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('notion_user');
-      if (stored) {
-        try {
+      try {
+        const stored = localStorage.getItem('notion_user');
+        if (stored) {
           const parsed = JSON.parse(stored);
           setUserEmail(parsed.name || parsed.username || 'Laksha');
-        } catch {}
-      }
+        }
+      } catch {}
     }
 
     let isMounted = true;

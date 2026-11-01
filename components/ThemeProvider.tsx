@@ -22,7 +22,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    const stored = localStorage.getItem('notion_theme') as Theme | null;
+    let stored: Theme | null = null;
+    try {
+      stored = localStorage.getItem('notion_theme') as Theme | null;
+    } catch {}
+
     if (stored) {
       setThemeState(stored);
       if (stored === 'dark') {
@@ -32,12 +36,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // Default to light mode for crisp Notion aesthetic, or match system
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const initialTheme = prefersDark ? 'dark' : 'light';
-      setThemeState(initialTheme);
-      if (initialTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
+      try {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = prefersDark ? 'dark' : 'light';
+        setThemeState(initialTheme);
+        if (initialTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch {
+        setThemeState('light');
         document.documentElement.classList.remove('dark');
       }
     }
@@ -45,7 +54,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem('notion_theme', newTheme);
+    try {
+      localStorage.setItem('notion_theme', newTheme);
+    } catch {}
     if (newTheme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {

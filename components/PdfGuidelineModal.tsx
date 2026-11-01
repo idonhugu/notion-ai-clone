@@ -198,6 +198,20 @@ export function PdfGuidelineModal({
       }
 
       const result: AnalyzedPresentationResult = data.result;
+      const rawSections = (result && (result.sections || (result as any))) || {};
+      const safeSections: ExtractedClinicalSections = {
+        history: Array.isArray(rawSections.history) ? rawSections.history : [],
+        examination: Array.isArray(rawSections.examination) ? rawSections.examination : [],
+        investigations: Array.isArray(rawSections.investigations) ? rawSections.investigations : [],
+        differentials: Array.isArray(rawSections.differentials) ? rawSections.differentials : [],
+        rare: Array.isArray(rawSections.rare) ? rawSections.rare : [],
+        plan: Array.isArray(rawSections.plan) ? rawSections.plan : [],
+        safetynetting: Array.isArray(rawSections.safetynetting) ? rawSections.safetynetting : [],
+        followup: Array.isArray(rawSections.followup) ? rawSections.followup : [],
+        referral: Array.isArray(rawSections.referral) ? rawSections.referral : [],
+        clinicalPearls: Array.isArray(rawSections.clinicalPearls) ? rawSections.clinicalPearls : [],
+      };
+      result.sections = safeSections;
       setAnalysisResult(result);
 
       // If backend returned catalog of presentations, update local state
@@ -242,7 +256,7 @@ export function PdfGuidelineModal({
 
   const toggleSectionAll = (sectionKey: string, selectAll: boolean) => {
     if (!analysisResult) return;
-    const items = analysisResult.sections[sectionKey as keyof ExtractedClinicalSections] || [];
+    const items = analysisResult?.sections?.[sectionKey as keyof ExtractedClinicalSections] || [];
     const sectionState: Record<number, boolean> = {};
     items.forEach((_, idx) => {
       sectionState[idx] = selectAll;
@@ -294,7 +308,7 @@ export function PdfGuidelineModal({
       // 1. Gather only the checked items per section
       const filteredSections: Partial<ExtractedClinicalSections> = {};
       SECTION_DEFINITIONS.forEach((def) => {
-        const rawItems = analysisResult.sections[def.key] || [];
+        const rawItems = analysisResult?.sections?.[def.key] || [];
         const checkedIndexes = selectedBullets[def.key] || {};
         const chosen = rawItems.filter((_, idx) => checkedIndexes[idx]);
         if (chosen.length > 0) {
@@ -584,12 +598,12 @@ export function PdfGuidelineModal({
                       </span>
                       <span
                         className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
-                          analysisResult.confidence === 'high'
+                          analysisResult?.confidence === 'high'
                             ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300'
                             : 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300'
                         }`}
                       >
-                        {analysisResult.confidence.toUpperCase()} CONFIDENCE
+                        {(analysisResult?.confidence || 'high').toUpperCase()} CONFIDENCE
                       </span>
                     </div>
                     <p className="text-[11px] text-neutral-500 dark:text-neutral-400 italic">
@@ -717,7 +731,7 @@ export function PdfGuidelineModal({
                 </div>
 
                 {SECTION_DEFINITIONS.map((def) => {
-                  const items = analysisResult.sections[def.key] || [];
+                  const items = analysisResult?.sections?.[def.key] || [];
                   if (items.length === 0) return null;
 
                   const sectionChecked = selectedBullets[def.key] || {};
