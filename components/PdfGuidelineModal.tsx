@@ -39,6 +39,7 @@ import {
 } from '@/lib/presentationMerger';
 import { fetchDocumentById, updateDocument, createDocument } from '@/lib/api/documents';
 import { useRouter } from 'next/navigation';
+import { extractTextFromFileInBrowser, formatFileSize } from '@/lib/clientDocumentParser';
 
 interface PdfGuidelineModalProps {
   isOpen: boolean;
@@ -77,6 +78,7 @@ export function PdfGuidelineModal({
 
   // Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgressMessage, setAnalysisProgressMessage] = useState<string>('');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalyzedPresentationResult | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
@@ -264,7 +266,7 @@ export function PdfGuidelineModal({
     setActiveConditionIdx(0);
   };
 
-  const handleFileChange = (file: File) => {
+  const handleFileChange = async (file: File) => {
     if (!file) return;
     const lower = file.name.toLowerCase();
     const isValidDoc =
@@ -290,17 +292,109 @@ export function PdfGuidelineModal({
     setAnalysisError(null);
     setAnalysisResult(null);
     setBatchApplySuccess(null);
+    setIsAnalyzing(true);
+    setAnalysisProgressMessage('Extracting readable text in browser...');
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setFileDataUrl(dataUrl);
-      handleAnalyzePdf(dataUrl, file.name, file.size);
-    };
-    reader.onerror = () => {
-      setAnalysisError('Failed to read the selected file.');
-    };
-    reader.readAsDataURL(file);
+    try {
+      // 1. Attempt client-side extraction first (safely bypasses server upload size limits)
+      const extraction = await extractTextFromFileInBrowser(file);
+
+      if (extraction.text && extraction.text.trim().length >= 25) {
+        setAnalysisProgressMessage('Analyzing clinical intelligence with Claude Opus 5.5...');
+
+        // If file is reasonably sized (<= 2.5MB), also cache dataUrl for optional PDF attachment
+        if (file.size <= 2.5 * 1024 * 1024) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            setFileDataUrl(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          setFileDataUrl(''); // Omit giant base64 strings (>2.5MB) to protect database rows
+        }
+
+        await handleAnalyzeExtractedText(extraction.text, file.name, file.type, file.size);
+        return;
+      }
+
+      // 2. Client-side extraction yielded minimal text (scanned image / non-standard encoding)
+      // If file is under 3MB, fall back to sending DataURL to server/vision engine
+      if (file.size < 3.0 * 1024 * 1024) {
+        setAnalysisProgressMessage('Reading file buffer and sending for analysis...');
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          setFileDataUrl(dataUrl);
+          handleAnalyzePdf(dataUrl, file.name, file.size);
+        };
+        reader.onerror = () => {
+          setAnalysisError('Failed to read the selected file.');
+          setIsAnalyzing(false);
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      // 3. File is large (>= 3MB) with non-extractable text:
+      // Do NOT send 10MB base64 over the wire to avoid HTTP 413 Payload Too Large!
+      setIsAnalyzing(false);
+      setAnalysisError(
+        `This document is ${formatFileSize(file.size)} and appears to contain scanned images or flattened graphics without selectable text. Because server uploads for image-only files are capped at 3MB to prevent timeouts, please copy and paste key lecture notes or slides into the "Paste Notes" tab for instant analysis.`
+      );
+    } catch (err: any) {
+      console.error('Document analysis error:', err);
+      setIsAnalyzing(false);
+      setAnalysisError(err?.message || 'Failed to process document.');
+    }
+  };
+
+  const handleAnalyzeExtractedText = async (
+    text: string,
+    name: string,
+    fileType: string,
+    size: number
+  ) => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+    setBatchApplySuccess(null);
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'analyze_pdf_for_presentation',
+          prompt: text,
+          fileName: name,
+          fileType: fileType || 'text/plain',
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMsg = `Server returned ${res.status}`;
+        if (res.status === 413) {
+          errorMsg = `Server returned 413 (Payload Too Large): Extracted text is too large for AI context. Try analyzing a section or chapter.`;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          if (errJson.error) errorMsg = errJson.error;
+          else if (res.statusText) errorMsg = `${res.status}: ${res.statusText}`;
+        }
+        throw new Error(errorMsg);
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.result) {
+        throw new Error(data.error || 'AI did not return structured guideline findings.');
+      }
+
+      setupAnalysisResult(data.result, data.presentations, data.fallbackNotice);
+    } catch (err: any) {
+      console.error('Extracted text analysis error:', err);
+      setAnalysisError(err.message || 'Failed to analyze document. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleAnalyzePdf = async (dataUrl: string, name: string, size: number) => {
@@ -322,8 +416,15 @@ export function PdfGuidelineModal({
       });
 
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `Server returned ${res.status}: ${res.statusText}`);
+        let errorMsg = `Server returned ${res.status}`;
+        if (res.status === 413) {
+          errorMsg = `Server returned 413 (Payload Too Large): The file is too large for direct upload (${formatFileSize(size)}). Please paste the lecture notes or use an OCR text version.`;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          if (errJson.error) errorMsg = errJson.error;
+          else if (res.statusText) errorMsg = `${res.status}: ${res.statusText}`;
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await res.json();
@@ -563,13 +664,13 @@ export function PdfGuidelineModal({
 
       // Prepare attached file object if user opted to attach PDF
       const newAttachedFile: AttachedFile | null =
-        attachPdfToDoc && fileDataUrl
+        attachPdfToDoc && (fileDataUrl || fileName)
           ? {
               id: `pdf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
               name: fileName || 'Clinical_Guideline.pdf',
               size: fileSize,
               type: 'application/pdf',
-              url: fileDataUrl,
+              url: fileSize <= 2.5 * 1024 * 1024 ? fileDataUrl || '' : '',
               uploadedAt: new Date().toLocaleDateString(undefined, {
                 month: 'short',
                 day: 'numeric',
@@ -960,7 +1061,7 @@ export function PdfGuidelineModal({
               </div>
               <div className="max-w-md">
                 <h3 className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
-                  Analyzing {fileName}...
+                  {analysisProgressMessage || `Analyzing ${fileName}...`}
                 </h3>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                   Identifying all covered conditions, mapping to 180+ Common Presentations, and sorting intelligence under condition headings...
@@ -973,14 +1074,29 @@ export function PdfGuidelineModal({
           {analysisError && (
             <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-3">
               <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 mt-0.5" />
-              <div className="flex-1">
-                <span className="font-bold">Notice: </span>
-                <span>{analysisError}</span>
+              <div className="flex-1 space-y-2">
+                <div>
+                  <span className="font-bold">Notice: </span>
+                  <span>{analysisError}</span>
+                </div>
+                {inputTab === 'upload' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputTab('paste');
+                      setAnalysisError(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold transition cursor-pointer"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>Switch to Paste Lecture Notes</span>
+                  </button>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => setAnalysisError(null)}
-                className="text-rose-500 hover:text-rose-700"
+                className="text-rose-500 hover:text-rose-700 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
