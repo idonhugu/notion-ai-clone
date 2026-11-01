@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   BookOpen,
@@ -24,9 +24,25 @@ import {
   ChevronRight,
   Flame,
   Eye,
+  Lightbulb,
+  Trash2,
+  Save,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
 } from 'lucide-react';
 import { CLINICAL_CALCULATORS, ClinicalCalculator } from '@/lib/clinicalCalculators';
 import { updateDocument, fetchDocumentById } from '@/lib/api/documents';
+import {
+  SavedClinicalLearning,
+  getSavedLearnings,
+  persistLearningLocally,
+  deleteLearningLocally,
+  extractLearningPointsFromEvidence,
+  appendLearningToCloudCPDDoc,
+  formatLearningsForAppraisal,
+} from '@/lib/learningPointsManager';
 
 interface ClinicalEvidenceModalProps {
   isOpen: boolean;
@@ -56,7 +72,7 @@ export function ClinicalEvidenceModal({
   currentDocContext = '',
   onInsertIntoPage,
 }: ClinicalEvidenceModalProps) {
-  const [activeTab, setActiveTab] = useState<'evidence' | 'calculators' | 'pathways'>('evidence');
+  const [activeTab, setActiveTab] = useState<'evidence' | 'calculators' | 'pathways' | 'saved_learning'>('evidence');
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamedEvidence, setStreamedEvidence] = useState('');
@@ -66,12 +82,30 @@ export function ClinicalEvidenceModal({
   const [selectedCalcId, setSelectedCalcId] = useState<string>('wells_dvt');
   const [selectedCriteria, setSelectedCriteria] = useState<Record<string, boolean>>({});
 
+  // Saved Clinical Learning Points & CPD state
+  const [savedLearnings, setSavedLearnings] = useState<SavedClinicalLearning[]>([]);
+  const [isSaveDrawerOpen, setIsSaveDrawerOpen] = useState(false);
+  const [learningTopic, setLearningTopic] = useState('');
+  const [learningPoints, setLearningPoints] = useState<string[]>([]);
+  const [newPointInput, setNewPointInput] = useState('');
+  const [personalReflection, setPersonalReflection] = useState('');
+  const [saveToCPDDoc, setSaveToCPDDoc] = useState(true);
+  const [saveToActiveDoc, setSaveToActiveDoc] = useState(false);
+  const [isSavingLearning, setIsSavingLearning] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<{ success: boolean; message: string; docId?: string } | null>(null);
+  const [learningSearchQuery, setLearningSearchQuery] = useState('');
+  const [expandedLearningId, setExpandedLearningId] = useState<string | null>(null);
+  const [copiedLearningId, setCopiedLearningId] = useState<string | null>(null);
+  const [insertedLearningId, setInsertedLearningId] = useState<string | null>(null);
+  const [copiedAppraisal, setCopiedAppraisal] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 80);
+      setSavedLearnings(getSavedLearnings());
     }
   }, [isOpen]);
 
@@ -95,6 +129,8 @@ export function ClinicalEvidenceModal({
     setCopiedNote(false);
     setInsertedToDoc(false);
     setSavedToPearls(false);
+    setIsSaveDrawerOpen(false);
+    setSaveFeedback(null);
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -165,44 +201,167 @@ export function ClinicalEvidenceModal({
     setTimeout(() => setInsertedToDoc(false), 2000);
   };
 
-  const handleSaveToClinicalPearls = async () => {
+  const handleOpenSaveDrawer = () => {
     if (!streamedEvidence) return;
+    const extracted = extractLearningPointsFromEvidence(streamedEvidence, query, currentDocTitle);
+    setLearningTopic(extracted.topic);
+    setLearningPoints(extracted.suggestedPoints);
+    setNewPointInput('');
+    setPersonalReflection('');
+    setSaveFeedback(null);
+    setIsSaveDrawerOpen(true);
+  };
+
+  const handleAddLearningPoint = () => {
+    if (!newPointInput.trim()) return;
+    setLearningPoints((prev) => [...prev, newPointInput.trim()]);
+    setNewPointInput('');
+  };
+
+  const handleRemoveLearningPoint = (index: number) => {
+    setLearningPoints((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleConfirmSaveLearning = async () => {
+    if (!streamedEvidence) return;
+    setIsSavingLearning(true);
+    setSaveFeedback(null);
+
     try {
-      const res = await fetch('/api/documents?include_archived=false');
-      const docs = await res.json();
-      const pearlsDoc = docs.find((d: any) =>
-        d.title?.toLowerCase().includes('clinical pearls') || d.title?.toLowerCase().includes('clinical dump')
-      );
-
-      if (pearlsDoc) {
-        const { document: fullPearlsDoc } = await fetchDocumentById(pearlsDoc.id);
-        const summaryMatch = streamedEvidence.match(/### 🎯 Executive Clinical Recommendation\s+([^\n#]+)/);
-        const pearlText = summaryMatch
-          ? summaryMatch[1].trim()
-          : streamedEvidence.split('\n').filter((l) => l.trim().length > 10)[0] || query;
-
-        const newBlock = {
-          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : 'b-' + Date.now(),
-          type: 'bulletListItem',
-          props: { textColor: 'default', backgroundColor: 'default', textAlignment: 'left' },
-          content: [
-            { type: 'text', text: `${query}: `, styles: { bold: true } },
-            { type: 'text', text: pearlText, styles: {} },
-          ],
-          children: [],
-        };
-
-        const existingBlocks = Array.isArray(fullPearlsDoc?.content) ? fullPearlsDoc.content : [];
-        await updateDocument(pearlsDoc.id, {
-          content: [...existingBlocks, newBlock],
-          updated_at: new Date().toISOString(),
-        });
-
-        setSavedToPearls(true);
-        setTimeout(() => setSavedToPearls(false), 2500);
+      const cleanPoints = learningPoints.map((p) => p.trim()).filter(Boolean);
+      if (cleanPoints.length === 0) {
+        cleanPoints.push(learningTopic || 'Reviewed clinical evidence and management.');
       }
+
+      const newItem: SavedClinicalLearning = {
+        id: 'learn_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        timestamp: new Date().toISOString(),
+        dateFormatted: new Date().toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        topic: learningTopic.trim() || 'Clinical Learning Point',
+        query: query.trim() || 'Clinical consultation query',
+        learningPoints: cleanPoints,
+        personalReflection: personalReflection.trim() || undefined,
+        fullEvidence: streamedEvidence,
+        docTitleContext: currentDocTitle || undefined,
+      };
+
+      // 1. Persist in local storage
+      const updated = persistLearningLocally(newItem);
+      setSavedLearnings(updated);
+
+      // 2. Persist to dedicated Cloud CPD Log Document
+      let cloudDocId: string | undefined;
+      if (saveToCPDDoc) {
+        const res = await appendLearningToCloudCPDDoc(newItem);
+        cloudDocId = res.docId;
+      }
+
+      // 3. Optional insert into active document
+      if (saveToActiveDoc && onInsertIntoPage) {
+        const docSnippet = `
+> 💡 **Clinical Learning Point (${newItem.topic}) — ${newItem.dateFormatted}:**
+> **Clinical Query / Scenario:** "${newItem.query}"
+>
+${newItem.learningPoints.map((p) => `> - 🎯 ${p}`).join('\n')}
+${newItem.personalReflection ? `>\n> 📝 **Clinician Reflection:** *${newItem.personalReflection}*\n` : ''}
+`;
+        onInsertIntoPage(docSnippet);
+      }
+
+      setSaveFeedback({
+        success: true,
+        message: saveToCPDDoc
+          ? 'Saved to "💡 Clinical Learning Points & CPD Log" in your workspace and your Saved Learning Bank!'
+          : 'Saved to your Saved Learning Bank!',
+        docId: cloudDocId,
+      });
+
+      setSavedToPearls(true);
+      setTimeout(() => setSavedToPearls(false), 2500);
+    } catch (err: any) {
+      console.error('Error saving clinical learning point:', err);
+      setSaveFeedback({
+        success: false,
+        message: err.message || 'Failed to save to cloud document. Saved locally.',
+      });
+    } finally {
+      setIsSavingLearning(false);
+    }
+  };
+
+  const handleDeleteLearning = (id: string) => {
+    const updated = deleteLearningLocally(id);
+    setSavedLearnings(updated);
+  };
+
+  const handleCopyLearningItem = (item: SavedClinicalLearning) => {
+    const text = `💡 ${item.topic} (${item.dateFormatted})
+Clinical Query: "${item.query}"
+
+Key Learning Points:
+${item.learningPoints.map((p) => `- 🎯 ${p}`).join('\n')}
+${item.personalReflection ? `\nReflection: ${item.personalReflection}` : ''}`;
+    navigator.clipboard.writeText(text);
+    setCopiedLearningId(item.id);
+    setTimeout(() => setCopiedLearningId(null), 2000);
+  };
+
+  const handleCopyAllForAppraisal = () => {
+    const text = formatLearningsForAppraisal(savedLearnings);
+    navigator.clipboard.writeText(text);
+    setCopiedAppraisal(true);
+    setTimeout(() => setCopiedAppraisal(false), 2000);
+  };
+
+  const handleInsertSavedLearningToDoc = (item: SavedClinicalLearning) => {
+    if (!onInsertIntoPage) return;
+    const docSnippet = `
+> 💡 **Clinical Learning Point (${item.topic}) — ${item.dateFormatted}:**
+> **Scenario:** "${item.query}"
+>
+${item.learningPoints.map((p) => `> - 🎯 ${p}`).join('\n')}
+${item.personalReflection ? `>\n> 📝 **Reflection:** *${item.personalReflection}*\n` : ''}
+`;
+    onInsertIntoPage(docSnippet);
+    setInsertedLearningId(item.id);
+    setTimeout(() => setInsertedLearningId(null), 2000);
+  };
+
+  const handleSaveToClinicalPearls = async () => {
+    // Quick 1-click save using our comprehensive manager
+    if (!streamedEvidence) return;
+    const extracted = extractLearningPointsFromEvidence(streamedEvidence, query, currentDocTitle);
+    const newItem: SavedClinicalLearning = {
+      id: 'learn_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      timestamp: new Date().toISOString(),
+      dateFormatted: new Date().toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      topic: extracted.topic,
+      query: query.trim() || 'Clinical consultation query',
+      learningPoints: extracted.suggestedPoints,
+      fullEvidence: streamedEvidence,
+      docTitleContext: currentDocTitle || undefined,
+    };
+
+    try {
+      const updated = persistLearningLocally(newItem);
+      setSavedLearnings(updated);
+      await appendLearningToCloudCPDDoc(newItem);
+      setSavedToPearls(true);
+      setTimeout(() => setSavedToPearls(false), 2500);
     } catch (err) {
-      console.error('Save to pearls error:', err);
+      console.error('Quick save to pearls error:', err);
     }
   };
 
@@ -236,6 +395,18 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
     setInsertedToDoc(true);
     setTimeout(() => setInsertedToDoc(false), 2000);
   };
+
+  const filteredLearnings = useMemo(() => {
+    if (!learningSearchQuery.trim()) return savedLearnings;
+    const q = learningSearchQuery.toLowerCase().trim();
+    return savedLearnings.filter(
+      (l) =>
+        l.topic.toLowerCase().includes(q) ||
+        l.query.toLowerCase().includes(q) ||
+        l.learningPoints.some((p) => p.toLowerCase().includes(q)) ||
+        (l.personalReflection && l.personalReflection.toLowerCase().includes(q))
+    );
+  }, [savedLearnings, learningSearchQuery]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -274,6 +445,18 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
               >
                 <Search className="w-3.5 h-3.5 text-purple-500" />
                 <span>Ask Evidence</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('saved_learning')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition font-medium ${
+                  activeTab === 'saved_learning'
+                    ? 'bg-white dark:bg-neutral-700 text-amber-700 dark:text-amber-300 shadow-xs'
+                    : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200'
+                }`}
+              >
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                <span>Saved Learning ({savedLearnings.length})</span>
               </button>
 
               <button
@@ -406,7 +589,20 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
                       <span>NICE CKS, BNF 2024 & BMJ Best Practice</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={handleOpenSaveDrawer}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition shadow-2xs ${
+                          isSaveDrawerOpen
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                        }`}
+                        title="Save learning points & clinical pearls from this consultation to your CPD log"
+                      >
+                        <Lightbulb className="w-3.5 h-3.5" />
+                        <span>{isSaveDrawerOpen ? 'Close Drawer' : 'Save Learning Point'}</span>
+                      </button>
+
                       <button
                         onClick={handleCopyConsultationSnippet}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition"
@@ -428,15 +624,6 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
                       )}
 
                       <button
-                        onClick={handleSaveToClinicalPearls}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800 text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition"
-                        title="Save as bullet item in Clinical Pearls"
-                      >
-                        {savedToPearls ? <Check className="w-3.5 h-3.5" /> : <BookmarkCheck className="w-3.5 h-3.5" />}
-                        <span>{savedToPearls ? 'Saved to Pearls!' : 'Save to Pearls'}</span>
-                      </button>
-
-                      <button
                         onClick={handleCopyFullEvidence}
                         className="p-1 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-200/60 dark:hover:bg-neutral-700 transition"
                         title="Copy full evidence text"
@@ -445,6 +632,192 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
                       </button>
                     </div>
                   </div>
+
+                  {/* Interactive Save Learning Point Drawer */}
+                  {isSaveDrawerOpen && (
+                    <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/80 space-y-3.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-amber-800/60">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-2xs">
+                            <Lightbulb className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-amber-950 dark:text-amber-200">
+                              Save Clinical Learning Point & CPD Log
+                            </h4>
+                            <p className="text-[10px] text-amber-800/80 dark:text-amber-400">
+                              Capture what you learned from this case for appraisal, revalidation, and ongoing practice.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsSaveDrawerOpen(false)}
+                          className="p-1 rounded-md text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Topic Input */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                          Clinical Topic / Case Title:
+                        </label>
+                        <input
+                          type="text"
+                          value={learningTopic}
+                          onChange={(e) => setLearningTopic(e.target.value)}
+                          placeholder="e.g. Recurrent UTI Prophylaxis & Nitrofurantoin Dosing"
+                          className="w-full px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-[#202020] border border-amber-200 dark:border-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Key Learning Points Checklist / Editor */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                            Key Learning Points & Pearls:
+                          </label>
+                          <span className="text-[10px] text-neutral-500">
+                            {learningPoints.length} points extracted
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                          {learningPoints.map((point, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-start gap-2 p-2 rounded-lg bg-white dark:bg-[#202020] border border-neutral-200/80 dark:border-neutral-800 text-xs shadow-2xs"
+                            >
+                              <span className="text-amber-500 font-bold shrink-0 mt-0.5">🎯</span>
+                              <span className="flex-1 text-neutral-800 dark:text-neutral-200 leading-snug">{point}</span>
+                              <button
+                                onClick={() => handleRemoveLearningPoint(idx)}
+                                className="text-neutral-400 hover:text-rose-500 p-0.5"
+                                title="Remove point"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Add new point input */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="text"
+                            value={newPointInput}
+                            onChange={(e) => setNewPointInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddLearningPoint()}
+                            placeholder="Add another learning point or pearl..."
+                            className="flex-1 px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-[#202020] border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                          <button
+                            onClick={handleAddLearningPoint}
+                            disabled={!newPointInput.trim()}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 disabled:opacity-40 transition"
+                          >
+                            + Add
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Optional Reflection */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
+                          Clinician Reflection / CPD Note (Optional):
+                        </label>
+                        <textarea
+                          value={personalReflection}
+                          onChange={(e) => setPersonalReflection(e.target.value)}
+                          rows={2}
+                          placeholder="What did you learn from this case? What will you do differently next time? (e.g. Always check eGFR before prescribing, recall patient in 2 weeks...)"
+                          className="w-full px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-[#202020] border border-amber-200 dark:border-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Save Targets */}
+                      <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
+                        <label className="flex items-center gap-1.5 cursor-pointer font-medium text-neutral-700 dark:text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={saveToCPDDoc}
+                            onChange={(e) => setSaveToCPDDoc(e.target.checked)}
+                            className="rounded text-amber-600 focus:ring-amber-500"
+                          />
+                          <span>Sync to workspace page: "💡 Clinical Learning Points & CPD Log"</span>
+                        </label>
+
+                        {onInsertIntoPage && (
+                          <label className="flex items-center gap-1.5 cursor-pointer font-medium text-neutral-700 dark:text-neutral-300">
+                            <input
+                              type="checkbox"
+                              checked={saveToActiveDoc}
+                              onChange={(e) => setSaveToActiveDoc(e.target.checked)}
+                              className="rounded text-amber-600 focus:ring-amber-500"
+                            />
+                            <span>Insert into active document note</span>
+                          </label>
+                        )}
+                      </div>
+
+                      {/* Save Feedback Banner */}
+                      {saveFeedback && (
+                        <div
+                          className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2 ${
+                            saveFeedback.success
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {saveFeedback.success ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            )}
+                            <span>{saveFeedback.message}</span>
+                          </div>
+                          {saveFeedback.success && (
+                            <button
+                              onClick={() => setActiveTab('saved_learning')}
+                              className="px-2.5 py-1 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 text-[11px] shrink-0"
+                            >
+                              View in Saved Tab ↗
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-200/60 dark:border-amber-800/60">
+                        <button
+                          onClick={() => setIsSaveDrawerOpen(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          onClick={handleConfirmSaveLearning}
+                          disabled={isSavingLearning}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition shadow-xs cursor-pointer"
+                        >
+                          {isSavingLearning ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Saving Learning Point...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-3.5 h-3.5" />
+                              <span>Confirm & Save Learning Point</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Rendered Evidence Document */}
                   <div className="p-5 bg-neutral-50/50 dark:bg-neutral-900/30 rounded-2xl border border-neutral-200/80 dark:border-neutral-800 text-xs leading-relaxed space-y-3 prose dark:prose-invert max-w-none">
@@ -684,6 +1057,212 @@ ${calcResult.details.map((d) => `  - ${d}`).join('\n')}
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: SAVED CLINICAL LEARNING POINTS & CPD PORTFOLIO */}
+          {activeTab === 'saved_learning' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Header Card */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-2xs shrink-0">
+                    <Lightbulb className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-950 dark:text-amber-100">
+                      Clinical Learning Points & CPD Portfolio
+                    </h3>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                      {savedLearnings.length} clinical pearls and consultation takeaways saved for appraisal & revalidation.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopyAllForAppraisal}
+                    disabled={savedLearnings.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition shadow-2xs disabled:opacity-40"
+                    title="Copy all saved learning points as a formatted CPD markdown portfolio"
+                  >
+                    {copiedAppraisal ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedAppraisal ? 'Portfolio Copied!' : 'Copy for Appraisal'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              {savedLearnings.length > 0 && (
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={learningSearchQuery}
+                    onChange={(e) => setLearningSearchQuery(e.target.value)}
+                    placeholder="Filter saved learning points by topic, drug, or clinical scenario..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-white dark:bg-[#202020] border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                  {learningSearchQuery && (
+                    <button
+                      onClick={() => setLearningSearchQuery('')}
+                      className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Cards List */}
+              {savedLearnings.length === 0 ? (
+                <div className="py-16 text-center space-y-3 text-neutral-400">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
+                    <Lightbulb className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
+                    No Saved Learning Points Yet
+                  </h3>
+                  <p className="text-xs text-neutral-500 max-w-md mx-auto">
+                    When you query clinical evidence or paste a consultation in Heidi Evidence, click{' '}
+                    <strong className="text-amber-600 dark:text-amber-400">"Save Learning Point"</strong> to capture what you learned. It will be stored here and automatically synced to your dedicated workspace CPD log!
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('evidence')}
+                    className="mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition"
+                  >
+                    Ask Evidence Now
+                  </button>
+                </div>
+              ) : filteredLearnings.length === 0 ? (
+                <div className="py-12 text-center text-xs text-neutral-500">
+                  No learning points found matching "{learningSearchQuery}"
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {filteredLearnings.map((item) => {
+                    const isExpanded = expandedLearningId === item.id;
+                    const isCopied = copiedLearningId === item.id;
+                    const isInserted = insertedLearningId === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#202020] space-y-3 shadow-2xs hover:shadow-xs transition"
+                      >
+                        {/* Card Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base">💡</span>
+                            <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
+                              {item.topic}
+                            </h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-mono">
+                              {item.dateFormatted}
+                            </span>
+                            {item.docTitleContext && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-medium">
+                                From: {item.docTitleContext}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => handleCopyLearningItem(item)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 transition"
+                              title="Copy learning points"
+                            >
+                              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{isCopied ? 'Copied' : 'Copy'}</span>
+                            </button>
+
+                            {onInsertIntoPage && (
+                              <button
+                                onClick={() => handleInsertSavedLearningToDoc(item)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition"
+                                title="Insert into active document"
+                              >
+                                {isInserted ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Plus className="w-3.5 h-3.5" />}
+                                <span>{isInserted ? 'Inserted' : 'Insert to Note'}</span>
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete learning point "${item.topic}"?`)) {
+                                  handleDeleteLearning(item.id);
+                                }
+                              }}
+                              className="p-1 rounded-md text-neutral-400 hover:text-rose-600 transition"
+                              title="Delete from log"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Consultation Query Quote */}
+                        {item.query && (
+                          <div className="p-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200/70 dark:border-neutral-800 text-[11px] text-neutral-600 dark:text-neutral-400 italic">
+                            <span className="font-semibold not-italic text-neutral-800 dark:text-neutral-200">
+                              Clinical Consultation / Scenario:{' '}
+                            </span>
+                            "{item.query}"
+                          </div>
+                        )}
+
+                        {/* Structured Learning Points */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                            Key Learning Points & Takeaways:
+                          </span>
+                          <div className="space-y-1">
+                            {item.learningPoints.map((pt, pIdx) => (
+                              <div key={pIdx} className="flex items-start gap-2 text-xs text-neutral-800 dark:text-neutral-200">
+                                <span className="text-amber-500 font-bold shrink-0 mt-0.5">🎯</span>
+                                <span>{pt}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Clinician Reflection */}
+                        {item.personalReflection && (
+                          <div className="p-2 rounded-lg bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/70 dark:border-purple-800/70 text-[11px] text-purple-900 dark:text-purple-200">
+                            <span className="font-bold">📝 Clinician Reflection: </span>
+                            <span className="italic">{item.personalReflection}</span>
+                          </div>
+                        )}
+
+                        {/* Full Evidence Collapsible */}
+                        {item.fullEvidence && (
+                          <div className="pt-1 border-t border-neutral-100 dark:border-neutral-800/80">
+                            <button
+                              onClick={() => setExpandedLearningId(isExpanded ? null : item.id)}
+                              className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              <span>{isExpanded ? 'Hide Full Heidi Evidence' : 'View Full Heidi Evidence Report'}</span>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="mt-2 p-3.5 rounded-xl bg-neutral-50/70 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 text-xs leading-relaxed space-y-2 prose dark:prose-invert max-w-none">
+                                <div
+                                  className="whitespace-pre-wrap font-sans text-neutral-800 dark:text-neutral-200"
+                                  dangerouslySetInnerHTML={{
+                                    __html: formatEvidenceHtml(item.fullEvidence),
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
